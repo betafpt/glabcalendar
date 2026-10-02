@@ -3,6 +3,7 @@ import { AppScreen } from "@/components/ui/app-screen";
 import { DatabaseErrorBanner } from "@/components/ui/database-error-banner";
 import { LocalizedText } from "@/components/ui/localized-text";
 import { StatusChip } from "@/components/ui/status-chip";
+import { WorkspaceMenu } from "@/components/production/workspace-menu";
 import { DEFAULT_APP_TIMEZONE, getServerConfig } from "@/lib/config";
 import { errorMessage } from "@/lib/error-message";
 import {
@@ -497,6 +498,7 @@ export default async function CalendarPage({
             >
               <Icon name="plus" />
             </Link>
+            <WorkspaceMenu />
           </div>
         </div>
 

@@ -43,4 +43,5 @@ export {
   Bag2,
   TaskSquare,
   Refresh2,
+  Setting2,
 } from "iconsax-react";

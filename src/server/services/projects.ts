@@ -23,6 +23,7 @@ export const projectInputSchema = z
     startsOn: z.string().date().nullable().optional(),
     endsOn: z.string().date().nullable().optional(),
     notes: nullableTrimmed,
+    coverImageUrl: nullableTrimmed,
   })
   .superRefine((value, ctx) => {
     if (value.startsOn && value.endsOn && value.endsOn < value.startsOn) {
@@ -47,6 +48,7 @@ export interface ProjectRepositoryPort {
     startsOn?: string | null;
     endsOn?: string | null;
     notes?: string | null;
+    coverImageUrl?: string | null;
   }): Promise<Project>;
   update(
     organizationId: string,
@@ -58,6 +60,7 @@ export interface ProjectRepositoryPort {
       startsOn: string | null;
       endsOn: string | null;
       notes: string | null;
+      coverImageUrl: string | null;
     }>
   ): Promise<Project | null>;
   remove(organizationId: string, projectId: string): Promise<boolean>;

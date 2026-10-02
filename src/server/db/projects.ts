@@ -10,7 +10,7 @@ export type CreateProjectInput = Omit<
 export type UpdateProjectInput = Partial<
   Pick<
     NewProject,
-    "name" | "clientName" | "status" | "startsOn" | "endsOn" | "notes"
+    "name" | "clientName" | "status" | "startsOn" | "endsOn" | "notes" | "coverImageUrl"
   >
 >;
 

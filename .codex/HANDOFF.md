@@ -82,6 +82,22 @@ Earlier invalid benchmark runs showed multi-second spikes because the sandbox bl
 - 2026-10-02 10:52: UI Instant Navigation overhaul: Added 0ms optimistic navigation + TopLoadingBar to BottomNavigation, created skeleton screens (loading.tsx) for /calendar, /projects, /crew, /equipment, /shoots. Verified PASS on typecheck and 144 unit tests.
 - 2026-10-02 11:06: BottomNavigation standardization: Removed duplicate router.push() and useTransition from Link onClick, relying solely on Next.js native Link navigation + prefetching while retaining 0ms optimistic pendingHref UI response. Verified PASS on typecheck and 144 unit tests.
 
+- 2026-10-02 14:10: Mobile UI Polish & Cover Image:
+  1. Fixed mobile popovers for Crew, Equipment, and Projects: centered with `fixed inset-x-3 top-16 z-50`, constrained height and scrollable so bottom navigation never obscures submit buttons.
+  2. Integrated `WorkspaceMenu` into the top navbar on all screens; removed floating `MobileUtilityMenu`.
+  3. Replaced VI/EN language toggle in settings popup with Sign Out button connected to `logoutAction`.
+  4. Mapped technical status `in_progress` to Vietnamese "Đang diễn ra" with warning pastel tone.
+  5. Enhanced `ImageUploadField` to support dual modes: local file upload (with WebP compression) and direct image URL paste with preview.
+  6. Added `coverImageUrl` to Project schema, database migration, project creation/edit forms, and project list/detail displays.
+  7. Verification: `npm run typecheck` PASS, `npm test` 144/144 tests PASS.
+
+- 2026-10-02 14:38: Click Outside & Modal Popover Upgrade:
+  - Replaced raw `<details>` popovers with dedicated `ModalPopover` component across Crew, Equipment, Equipment [id], and Projects.
+  - Implemented full-screen backdrop with click-outside listener to instantly dismiss modal when clicking outside.
+  - Added explicit '✕' close button in header, keyboard Escape dismissal, and mobile background scroll locking.
+  - Added click-outside dismissal to `WorkspaceMenu`.
+  - Typecheck and 144/144 unit tests PASS.
+
 ## Last Updated
-2026-10-02T11:06:00+07:00
+2026-10-02T14:38:00+07:00
 

@@ -53,6 +53,7 @@ export async function createProjectAction(
       startsOn: optionalString(formData, "startsOn"),
       endsOn: optionalString(formData, "endsOn"),
       notes: optionalString(formData, "notes"),
+      coverImageUrl: optionalString(formData, "coverImageUrl"),
     });
 
     if (!result.ok) {
@@ -92,6 +93,7 @@ export async function updateProjectAction(
       startsOn: optionalString(formData, "startsOn"),
       endsOn: optionalString(formData, "endsOn"),
       notes: optionalString(formData, "notes"),
+      coverImageUrl: optionalString(formData, "coverImageUrl"),
     });
 
     if (!result.ok) {

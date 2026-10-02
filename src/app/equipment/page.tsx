@@ -7,6 +7,8 @@ import { Calendar, Add, ArrowRight2, Camera } from "@/components/ui/iconsax";
 import { errorMessage } from "@/lib/error-message";
 import { getInitialOrganization } from "@/server/organization-context";
 import { EquipmentForm } from "./equipment-form";
+import { WorkspaceMenu } from "@/components/production/workspace-menu";
+import { ModalPopover } from "@/components/ui/modal-popover";
 
 export const dynamic = "force-dynamic";
 
@@ -79,7 +81,7 @@ export default async function EquipmentPage({
 
   return (
     <AppScreen className="max-w-5xl pt-5 sm:pt-7">
-      <div className="flex items-center justify-between gap-3 pr-14 lg:pr-0">
+      <div className="flex items-center justify-between gap-3">
         <p className="text-[15px] font-black uppercase tracking-[-.02em]">{currentMonthYear}</p>
         <div className="flex items-center gap-2">
           <Link
@@ -89,13 +91,19 @@ export default async function EquipmentPage({
             <Calendar size={18} variant="Linear" />
             <span className="sr-only"><LocalizedText vi="Xem lịch" en="View calendar" /></span>
           </Link>
-          <details className="relative">
-            <summary className="grid size-11 cursor-pointer list-none place-items-center rounded-full bg-ink text-2xl text-white"><Add size={20} variant="Linear" /><span className="sr-only"><LocalizedText vi="Thêm thiết bị" en="Add gear" /></span></summary>
-            <div className="absolute right-0 top-14 z-30 w-[min(88vw,390px)] rounded-r28 border border-stroke bg-surface p-5 shadow-nav">
-              <p className="mb-4 text-xs font-black uppercase tracking-[.18em] text-pink"><LocalizedText vi="Thêm thiết bị" en="Add gear" /></p>
-              <EquipmentForm />
-            </div>
-          </details>
+          <ModalPopover
+            triggerAriaLabel="Add gear"
+            trigger={
+              <span className="grid size-11 place-items-center rounded-full bg-ink text-2xl text-white shadow-soft transition hover:bg-pink active:scale-press">
+                <Add size={20} variant="Linear" />
+                <span className="sr-only"><LocalizedText vi="Thêm thiết bị" en="Add gear" /></span>
+              </span>
+            }
+            title={<LocalizedText vi="Thêm thiết bị" en="Add gear" />}
+          >
+            <EquipmentForm />
+          </ModalPopover>
+          <WorkspaceMenu />
         </div>
       </div>
 

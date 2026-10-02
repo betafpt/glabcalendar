@@ -9,11 +9,11 @@ test.describe("Today Dashboard Flow", () => {
     // Check main title
     const heading = page.getByRole("heading", { level: 1 });
     await expect(heading).toBeVisible();
-    await expect(heading).toContainText(/(HÃ´m nay|Today)/i);
+    await expect(heading).toContainText(/(Hôm nay|Today)/i);
 
     // Verify production date bar
     await expect(
-      page.getByText(/(NgÃ y sáº£n xuáº¥t|Production day)/i)
+      page.getByText(/(Ngày sản xuất|Production day)/i)
     ).toBeVisible();
   });
 
@@ -21,18 +21,18 @@ test.describe("Today Dashboard Flow", () => {
     // Check presence of KPI links/cards
     const shootsCard = page.locator('a[href="/shoots"]').first();
     await expect(shootsCard).toBeVisible();
-    await expect(shootsCard).toContainText(/(Buá»•i quay|Shoots)/i);
+    await expect(shootsCard).toContainText(/(Buổi quay|Shoots)/i);
 
     const crewCard = page.locator('a[href="/crew"]').first();
     await expect(crewCard).toBeVisible();
-    await expect(crewCard).toContainText(/(NhÃ¢n sá»±|Crew)/i);
+    await expect(crewCard).toContainText(/(Nhân sự|Crew)/i);
 
     const gearCard = page.locator('a[href="/equipment"]').first();
     await expect(gearCard).toBeVisible();
-    await expect(gearCard).toContainText(/(Thiáº¿t bá»‹|Gear)/i);
+    await expect(gearCard).toContainText(/(Thiết bị|Gear)/i);
 
     // Conflict summary metric
-    await expect(page.getByText(/(Xung Ä‘á»™t|Conflicts)/i).first()).toBeVisible();
+    await expect(page.getByText(/(Xung đột|Conflicts)/i).first()).toBeVisible();
   });
 
   test("displays scheduled today shoot card from demo seed data", async ({ page }) => {
@@ -80,7 +80,7 @@ test.describe("Today Dashboard Flow", () => {
 
   test("toggles application language via language switcher", async ({ page }) => {
     // Find language switcher buttons
-    const langBtn = page.locator("button").filter({ hasText: /^(VI|EN|Tiáº¿ng Viá»‡t|English)$/i }).first();
+    const langBtn = page.locator("button").filter({ hasText: /^(VI|EN|Tiếng Việt|English)$/i }).first();
     if (await langBtn.isVisible()) {
       await langBtn.click();
       // Confirm that the document lang or text changed

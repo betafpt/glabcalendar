@@ -10,6 +10,8 @@ import { errorMessage } from "@/lib/error-message";
 import type { Project } from "@/server/db/schema";
 import { getInitialOrganization } from "@/server/organization-context";
 import { ProjectCreateForm } from "./project-create-form";
+import { WorkspaceMenu } from "@/components/production/workspace-menu";
+import { ModalPopover } from "@/components/ui/modal-popover";
 
 export const dynamic = "force-dynamic";
 
@@ -84,7 +86,7 @@ export default async function ProjectsPage({
 
   return (
     <AppScreen className="max-w-5xl pt-5 sm:pt-7">
-      <div className="flex items-center justify-between gap-3 pr-14 lg:pr-0">
+      <div className="flex items-center justify-between gap-3">
         <p className="text-[15px] font-black uppercase tracking-[-.02em]"><LocalizedDateTime value={now.toISOString()} options={{ month: "short", year: "numeric" }} uppercase /></p>
         <div className="flex items-center gap-2">
           <Link
@@ -94,20 +96,19 @@ export default async function ProjectsPage({
             📅
             <span className="sr-only"><LocalizedText vi="Xem lịch" en="View calendar" /></span>
           </Link>
-          <details className="relative">
-            <summary
-              className="grid size-11 cursor-pointer list-none place-items-center rounded-full bg-ink text-2xl font-light text-white shadow-soft transition duration-fast hover:bg-pink active:scale-press select-none [&::-webkit-details-marker]:hidden"
-            >
-              +
-              <span className="sr-only"><LocalizedText vi="Tạo dự án" en="Create project" /></span>
-            </summary>
-            <div className="absolute -right-12 sm:right-0 top-14 z-30 max-h-[85vh] w-[min(calc(100vw-32px),380px)] overflow-y-auto rounded-r28 border border-stroke bg-surface p-5 shadow-nav">
-              <p className="mb-4 text-xs font-black uppercase tracking-[.18em] text-pink">
-                <LocalizedText vi="Dự án mới" en="New project" />
-              </p>
-              <ProjectCreateForm />
-            </div>
-          </details>
+          <ModalPopover
+            triggerAriaLabel="Create project"
+            trigger={
+              <span className="grid size-11 place-items-center rounded-full bg-ink text-2xl font-light text-white shadow-soft transition duration-fast hover:bg-pink active:scale-press select-none">
+                +
+                <span className="sr-only"><LocalizedText vi="Tạo dự án" en="Create project" /></span>
+              </span>
+            }
+            title={<LocalizedText vi="Dự án mới" en="New project" />}
+          >
+            <ProjectCreateForm />
+          </ModalPopover>
+          <WorkspaceMenu />
         </div>
       </div>
 
@@ -170,11 +171,17 @@ export default async function ProjectsPage({
               className={`group grid grid-cols-[104px_1fr] sm:grid-cols-[136px_1fr] gap-3 rounded-r22 sm:rounded-r28 border border-ink/8 p-2.5 sm:p-3.5 shadow-soft transition duration-base hover:-translate-y-0.5 hover:shadow-md hover:border-ink/15 active:scale-press ${tone}`}
             >
               <div className="relative h-full min-h-[132px] overflow-hidden rounded-r16 bg-ink/10 select-none">
-                <div className="absolute inset-0 bg-[linear-gradient(145deg,rgba(9,9,9,0.12),transparent_42%),radial-gradient(circle_at_72%_28%,rgba(255,255,255,0.85),transparent_34%)]" />
-                <div className="absolute inset-x-[18%] bottom-[16%] top-[18%] rounded-r16 bg-ink/80 shadow-[10px_10px_0_rgba(255,255,255,0.45)] sm:shadow-[12px_12px_0_rgba(255,255,255,0.45)]" />
-                <div className="absolute inset-0 grid place-items-center font-display text-3xl sm:text-4xl font-black uppercase text-white/40">
-                  GL
-                </div>
+                {project.coverImageUrl ? (
+                  <img src={project.coverImageUrl} alt={project.name} className="absolute inset-0 h-full w-full object-cover" />
+                ) : (
+                  <>
+                    <div className="absolute inset-0 bg-[linear-gradient(145deg,rgba(9,9,9,0.12),transparent_42%),radial-gradient(circle_at_72%_28%,rgba(255,255,255,0.85),transparent_34%)]" />
+                    <div className="absolute inset-x-[18%] bottom-[16%] top-[18%] rounded-r16 bg-ink/80 shadow-[10px_10px_0_rgba(255,255,255,0.45)] sm:shadow-[12px_12px_0_rgba(255,255,255,0.45)]" />
+                    <div className="absolute inset-0 grid place-items-center font-display text-3xl sm:text-4xl font-black uppercase text-white/40">
+                      GL
+                    </div>
+                  </>
+                )}
                 <div className="absolute inset-x-2 bottom-2 truncate rounded-pill bg-white/90 px-2 py-1 text-center text-[9px] font-black uppercase tracking-wider text-ink shadow-sm backdrop-blur-xs">
                   {project.clientName || "G.Lab"}
                 </div>

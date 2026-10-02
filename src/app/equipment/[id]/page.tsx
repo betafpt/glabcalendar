@@ -12,6 +12,8 @@ import type { EquipmentBooking, EquipmentItem } from "@/server/db/schema";
 import { getInitialOrganization } from "@/server/organization-context";
 import { EquipmentForm } from "../equipment-form";
 import { deleteEquipmentAction } from "../actions";
+import { WorkspaceMenu } from "@/components/production/workspace-menu";
+import { ModalPopover } from "@/components/ui/modal-popover";
 
 export const dynamic = "force-dynamic";
 
@@ -109,7 +111,7 @@ export default async function EquipmentDetail({ params }: { params: { id: string
 
   return (
     <AppScreen className="max-w-5xl pt-5 sm:pt-7">
-      <div className="flex items-center justify-between gap-3 pr-14 lg:pr-0">
+      <div className="flex items-center justify-between gap-3">
         <Link
           href="/equipment"
           className="grid size-11 place-items-center rounded-full bg-surface text-2xl font-bold shadow-soft transition hover:bg-white active:scale-press"
@@ -118,24 +120,22 @@ export default async function EquipmentDetail({ params }: { params: { id: string
           <span className="sr-only"><LocalizedText vi="Quay lại danh sách thiết bị" en="Back to equipment list" /></span>
         </Link>
         <div className="flex items-center gap-2">
-          <details className="relative">
-            <summary
-              aria-label="Gear actions"
-              className="grid size-11 cursor-pointer list-none place-items-center rounded-full bg-surface text-xl shadow-soft transition hover:bg-white active:scale-press [&::-webkit-details-marker]:hidden"
-            >
-              •••
-              <span className="sr-only"><LocalizedText vi="Tùy chọn thiết bị" en="Gear actions" /></span>
-            </summary>
-            <div className="absolute right-0 top-14 z-30 w-[min(88vw,390px)] rounded-r28 border border-stroke bg-surface p-5 shadow-nav">
-              <p className="mb-4 text-xs font-black uppercase tracking-[.18em] text-pink">
-                <LocalizedText vi="Cập nhật thiết bị" en="Update gear" />
-              </p>
-              <EquipmentForm item={item} />
-              <div className="mt-5 border-t border-stroke pt-5">
-                <DeleteEntityButton action={deleteEquipmentAction.bind(null, item.id)} successHref="/equipment" viLabel="Xóa thiết bị" enLabel="Delete equipment" />
-              </div>
+          <ModalPopover
+            triggerAriaLabel="Gear actions"
+            trigger={
+              <span className="grid size-11 place-items-center rounded-full bg-surface text-xl shadow-soft transition hover:bg-white active:scale-press">
+                •••
+                <span className="sr-only"><LocalizedText vi="Tùy chọn thiết bị" en="Gear actions" /></span>
+              </span>
+            }
+            title={<LocalizedText vi="Cập nhật thiết bị" en="Update gear" />}
+          >
+            <EquipmentForm item={item} />
+            <div className="mt-5 border-t border-stroke pt-5">
+              <DeleteEntityButton action={deleteEquipmentAction.bind(null, item.id)} successHref="/equipment" viLabel="Xóa thiết bị" enLabel="Delete equipment" />
             </div>
-          </details>
+          </ModalPopover>
+          <WorkspaceMenu />
         </div>
       </div>
 

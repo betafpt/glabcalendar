@@ -28,6 +28,7 @@ const mockProject: Project = {
   startsOn: "2026-09-01",
   endsOn: "2026-09-30",
   notes: "Principal photography",
+  coverImageUrl: null,
   createdAt: new Date("2026-09-01T00:00:00Z"),
   updatedAt: new Date("2026-09-01T00:00:00Z"),
 };

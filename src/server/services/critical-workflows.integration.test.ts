@@ -229,6 +229,7 @@ describe("critical scheduling workflows", () => {
           startsOn: input.startsOn ?? null,
           endsOn: input.endsOn ?? null,
           notes: input.notes ?? null,
+          coverImageUrl: input.coverImageUrl ?? null,
           createdAt: new Date("2026-10-01T00:00:00Z"),
           updatedAt: new Date("2026-10-01T00:00:00Z"),
         };

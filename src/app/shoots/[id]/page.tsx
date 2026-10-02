@@ -15,6 +15,7 @@ import type { ShootReadinessSummary } from "@/server/services/shoot-readiness";
 import { ResourceScheduling } from "./resource-scheduling";
 import { ShootChecklist } from "./shoot-checklist";
 import { ShootEditForm } from "./shoot-edit-form";
+import { WorkspaceMenu } from "@/components/production/workspace-menu";
 import { deleteShootAction } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -191,7 +192,7 @@ export default async function ShootDetailPage({ params }: { params: { id: string
 
   return (
     <AppScreen className="max-w-6xl overflow-x-clip pt-5 sm:pt-7">
-      <div className="flex items-center justify-between gap-3 pr-14 lg:pr-0">
+      <div className="flex items-center justify-between gap-3">
         <Link
           href="/shoots"
           className="grid size-11 place-items-center rounded-full bg-surface text-2xl font-bold transition duration-fast hover:bg-white active:scale-press"
@@ -199,6 +200,7 @@ export default async function ShootDetailPage({ params }: { params: { id: string
           ‹
           <span className="sr-only"><LocalizedText vi="Quay lại danh sách buổi quay" en="Back to shoots" /></span>
         </Link>
+        <WorkspaceMenu />
       </div>
 
       <header className="mt-3 min-w-0">

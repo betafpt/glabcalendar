@@ -11,6 +11,7 @@ import { getServerConfig } from "@/lib/config";
 import { errorMessage } from "@/lib/error-message";
 import { getInitialOrganization } from "@/server/organization-context";
 import { ShootCreateForm } from "./shoot-create-form";
+import { WorkspaceMenu } from "@/components/production/workspace-menu";
 
 export const dynamic = "force-dynamic";
 
@@ -73,7 +74,7 @@ export default async function ShootsPage({
 
   return (
     <AppScreen className="max-w-6xl pt-5 sm:pt-7">
-      <div className="flex items-center justify-between gap-3 pr-14 lg:pr-0">
+      <div className="flex items-center justify-between gap-3">
         <p className="text-[15px] font-black uppercase tracking-[-.02em]"><LocalizedDateTime value={now.toISOString()} options={{ month: "short", year: "numeric", timeZone: timezone }} uppercase /></p>
         <div className="flex items-center gap-2">
           <Link
@@ -83,6 +84,7 @@ export default async function ShootsPage({
             📅
             <span className="sr-only"><LocalizedText vi="Xem lịch" en="View calendar" /></span>
           </Link>
+          <WorkspaceMenu />
         </div>
       </div>
 

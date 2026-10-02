@@ -8,7 +8,7 @@ test.describe("Critical Production Flow E2E", () => {
     await page.goto("/");
     const mainTitle = page.getByRole("heading", { level: 1 });
     await expect(mainTitle).toBeVisible();
-    await expect(mainTitle).toContainText(/(HÃ´m nay|Today)/i);
+    await expect(mainTitle).toContainText(/(Hôm nay|Today)/i);
 
     // Verify today's scheduled shoot is displayed
     const todayShootCard = page.locator('a[href*="/shoots/30000000-0000-0000-0000-000000000001"]').first();

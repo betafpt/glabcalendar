@@ -41,6 +41,7 @@ export const projects = pgTable(
     startsOn: date("starts_on", { mode: "string" }),
     endsOn: date("ends_on", { mode: "string" }),
     notes: text("notes"),
+    coverImageUrl: text("cover_image_url"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),

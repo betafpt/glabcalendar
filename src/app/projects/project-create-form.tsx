@@ -5,6 +5,7 @@ import { LocalizedText } from "@/components/ui/localized-text";
 import { useLanguage } from "@/components/language-provider";
 import { localizeErrorMessage } from "@/i18n/errors";
 import { fieldClass, labelClass, primaryButtonClass } from "@/components/ui/form-styles";
+import { ImageUploadField } from "@/components/ui/image-upload-field";
 import { createProjectAction, type ProjectActionState } from "./actions";
 
 const initialState: ProjectActionState = { ok: false };
@@ -25,6 +26,7 @@ export function ProjectCreateForm() {
 
   return (
     <form action={formAction} className="space-y-5">
+      <ImageUploadField name="coverImageUrl" label="ẢNH BÌA DỰ ÁN" />
       <div>
         <label htmlFor="name" className={labelClass}><LocalizedText vi="Tên dự án" en="Project name" /></label>
         <input id="name" name="name" required className={fieldClass} placeholder={locale === "vi" ? "Chiến dịch mùa hè" : "Summer campaign"} />

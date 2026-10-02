@@ -11,6 +11,7 @@ import { errorMessage } from "@/lib/error-message";
 import type { Project } from "@/server/db/schema";
 import { getInitialOrganization } from "@/server/organization-context";
 import { ProjectEditForm } from "./project-edit-form";
+import { WorkspaceMenu } from "@/components/production/workspace-menu";
 import { deleteProjectAction } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -48,9 +49,12 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
   if (error) {
     return (
       <AppScreen className="pt-5 sm:pt-7">
-        <Link href="/projects" className="inline-flex min-h-11 items-center rounded-pill bg-surface px-4 text-sm font-black text-secondary transition hover:text-ink">
-          ← <LocalizedText vi="Dự án" en="Projects" />
-        </Link>
+        <div className="flex items-center justify-between gap-3">
+          <Link href="/projects" className="inline-flex min-h-11 items-center rounded-pill bg-surface px-4 text-sm font-black text-secondary transition hover:text-ink">
+            ← <LocalizedText vi="Dự án" en="Projects" />
+          </Link>
+          <WorkspaceMenu />
+        </div>
         <div className="mt-5">
           <DatabaseErrorBanner error={error} />
         </div>
@@ -62,12 +66,20 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
 
   return (
     <AppScreen>
-      <Link href="/projects" className="inline-flex min-h-11 items-center rounded-pill bg-surface px-4 text-sm font-black text-secondary transition hover:text-ink">
+      <div className="flex items-center justify-between gap-3">
+        <Link href="/projects" className="inline-flex min-h-11 items-center rounded-pill bg-surface px-4 text-sm font-black text-secondary transition hover:text-ink">
         ← <LocalizedText vi="Dự án" en="Projects" />
       </Link>
+        <WorkspaceMenu />
+      </div>
       <div className="mt-5 grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,.65fr)]">
         <div className="space-y-6">
           <section className="rounded-r28 border border-stroke bg-lilac p-6 sm:p-8">
+            {project.coverImageUrl ? (
+              <div className="mb-6 overflow-hidden rounded-r22 border border-ink/10 aspect-[2.4] max-h-64 w-full bg-ink/10 shadow-soft">
+                <img src={project.coverImageUrl} alt={project.name} className="h-full w-full object-cover" />
+              </div>
+            ) : null}
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-black uppercase tracking-[.16em] text-secondary"><LocalizedText vi="Dự án" en="Project" /></p>

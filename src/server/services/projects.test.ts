@@ -11,6 +11,7 @@ const project: Project = {
   startsOn: "2026-10-01",
   endsOn: "2026-10-02",
   notes: null,
+  coverImageUrl: null,
   createdAt: new Date("2026-09-29T00:00:00Z"),
   updatedAt: new Date("2026-09-29T00:00:00Z"),
 };

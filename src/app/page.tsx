@@ -9,6 +9,7 @@ import { DEFAULT_APP_TIMEZONE, getServerConfig } from "@/lib/config";
 import { errorMessage } from "@/lib/error-message";
 import type { TodayDashboardSummary } from "@/server/db/dashboard";
 import { getInitialOrganization } from "@/server/organization-context";
+import { WorkspaceMenu } from "@/components/production/workspace-menu";
 
 export const dynamic = "force-dynamic";
 
@@ -114,6 +115,7 @@ function formatDateLabels(anchor: Date, timeZone: string) {
 
 const statusToneMap: Record<string, "success" | "warning" | "error" | "neutral"> = {
   confirmed: "success",
+  in_progress: "warning",
   completed: "neutral",
   cancelled: "error",
   planned: "warning",
@@ -121,6 +123,7 @@ const statusToneMap: Record<string, "success" | "warning" | "error" | "neutral">
 
 const statusLabels: Record<string, { vi: string; en: string }> = {
   confirmed: { vi: "Đã xác nhận", en: "Confirmed" },
+  in_progress: { vi: "Đang diễn ra", en: "In progress" },
   planned: { vi: "Kế hoạch", en: "Planned" },
   completed: { vi: "Hoàn thành", en: "Completed" },
   cancelled: { vi: "Đã hủy", en: "Cancelled" },
@@ -134,7 +137,7 @@ export default async function TodayDashboard() {
   return (
     <AppScreen className="max-w-[1180px] pb-40 pt-4 sm:pb-36 sm:pt-6 lg:pb-10 lg:pt-8">
       {/* Top Header Bar */}
-      <div className="flex items-center justify-between gap-2 pr-12 sm:pr-14 lg:pr-0">
+      <div className="flex items-center justify-between gap-2">
         <Link
           href="/calendar"
           className="group inline-flex h-9 sm:h-10 items-center gap-1.5 rounded-pill border border-stroke/80 bg-surface/90 px-3 text-xs sm:text-sm font-black tracking-[-0.02em] text-ink shadow-soft transition-all duration-fast hover:bg-white active:scale-press"
@@ -167,6 +170,7 @@ export default async function TodayDashboard() {
           >
             <Add size={18} variant="Linear" />
           </Link>
+          <WorkspaceMenu />
         </div>
       </div>
 

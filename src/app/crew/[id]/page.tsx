@@ -13,6 +13,7 @@ import type { CrewMember, Shoot, ShootCrewAssignment } from "@/server/db/schema"
 import { getInitialOrganization } from "@/server/organization-context";
 import { CrewForm } from "../crew-form";
 import { deleteCrewAction } from "../actions";
+import { WorkspaceMenu } from "@/components/production/workspace-menu";
 
 export const dynamic = "force-dynamic";
 
@@ -125,7 +126,7 @@ export default async function CrewDetail({ params }: { params: { id: string } })
 
   return (
     <AppScreen className="max-w-6xl pt-5 sm:pt-7">
-      <div className="flex items-center justify-between gap-3 pr-14 lg:pr-0">
+      <div className="flex items-center justify-between gap-3">
         <Link
           href="/crew"
           className="grid size-11 place-items-center rounded-full bg-surface text-xl font-black shadow-soft transition hover:bg-white active:scale-press"
@@ -141,6 +142,7 @@ export default async function CrewDetail({ params }: { params: { id: string } })
             📅
             <span className="sr-only"><LocalizedText vi="Xem lịch" en="View calendar" /></span>
           </Link>
+          <WorkspaceMenu />
         </div>
       </div>
 

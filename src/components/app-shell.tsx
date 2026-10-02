@@ -44,36 +44,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </aside>
         <div className="min-w-0">
-          <MobileUtilityMenu />
           {children}
         </div>
       </div>
       <div className="lg:hidden"><BottomNavigation /></div>
     </div>
-  );
-}
-
-function MobileUtilityMenu() {
-  return (
-    <details className="fixed right-4 top-4 z-50 lg:hidden">
-      <summary
-        aria-label="Open workspace menu"
-        className="grid size-10 cursor-pointer list-none place-items-center rounded-full border border-stroke/70 bg-surface text-[11px] font-black text-ink shadow-soft transition hover:bg-white active:scale-press [&::-webkit-details-marker]:hidden"
-      >
-        GL
-      </summary>
-      <div className="absolute right-0 top-12 w-52 rounded-r22 border border-stroke bg-surface p-2 shadow-nav">
-        <Link
-          href="/settings"
-          className="flex min-h-11 items-center rounded-r16 px-3 text-sm font-black text-ink transition hover:bg-bg"
-        >
-          <LocalizedText vi="Cài đặt" en="Settings" />
-        </Link>
-        <div className="mt-1 border-t border-stroke/70 pt-2">
-          <LanguageSwitcher />
-        </div>
-      </div>
-    </details>
   );
 }
 function LinkBrand() {
