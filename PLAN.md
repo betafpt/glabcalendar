@@ -49,7 +49,7 @@ The workspace is currently empty and is not initialized as a Git repository. No 
 
 ## Out of scope for first release
 
-- Google Calendar synchronization.
+- Fully automatic two-way Google Calendar synchronization.
 - AI natural-language commands.
 - Push/email/SMS notifications.
 - Multi-user teams and permissions.
@@ -112,6 +112,14 @@ Every implementation task is accepted only when:
 ## Future-ready extension points
 
 - `calendar_integrations`: provider connection metadata and sync cursors.
+- Automatic Google Calendar two-way sync:
+  - G.Lab -> Google is already triggered automatically when a shoot is created or updated.
+  - Google -> G.Lab currently requires `syncAll()` / the "ĐỒNG BỘ NGAY" action.
+  - Planned follow-up: add Google Calendar push notifications (`events.watch` webhook/channel) for near-real-time inbound sync.
+  - Add channel lifecycle handling: create/renew/expire/revoke watch channels, validate notification headers, and persist channel metadata.
+  - Webhook should only enqueue/trigger reconciliation; `nextSyncToken` remains the authoritative incremental pull mechanism.
+  - Keep the existing idempotency/hash logic and conflict rules to prevent sync loops and duplicate events.
+  - Add Vercel Cron as a fallback/recovery sync for missed webhooks and channel renewal.
 - Domain events/outbox: source for notifications and external sync.
 - Command/application service layer: future AI commands call the same use cases as the UI.
 - `organizations` + memberships: future multi-user/team tenancy.
@@ -119,5 +127,5 @@ Every implementation task is accepted only when:
 
 ## Implementation ownership
 
-- Codex: architecture, planning, task definition, review, QA, acceptance decisions.
-- Gemini: implementation only, one atomic task at a time.
+- Codex: architecture, planning, task definition, review, QA, acceptance decisions, and non-UI logic/backend work when needed.
+- Gemini: primary implementation owner for all UI/UX work, including layout, styling, visual polish, responsive behavior, interaction presentation, and UI localization fixes. Codex should delegate UI changes to Gemini first, then review and verify the result.

@@ -11,6 +11,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import type { AdapterAccountType } from "next-auth/adapters";
 
 export const organizations = pgTable("organizations", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -114,6 +115,7 @@ export const crewMembers = pgTable(
     email: text("email"),
     status: text("status").notNull().default("active"),
     notes: text("notes"),
+    avatarDataUrl: text("avatar_data_url"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -139,6 +141,7 @@ export const equipmentItems = pgTable(
     serialNumber: text("serial_number"),
     status: text("status").notNull().default("available"),
     notes: text("notes"),
+    imageDataUrl: text("image_data_url"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -215,3 +218,171 @@ export const shootChecklistItems = pgTable(
 
 export type ShootChecklistItem = typeof shootChecklistItems.$inferSelect;
 export type NewShootChecklistItem = typeof shootChecklistItems.$inferInsert;
+
+export const users = pgTable("users", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name"),
+  email: text("email").notNull().unique(),
+  emailVerified: timestamp("email_verified", { withTimezone: true, mode: "date" }),
+  image: text("image"),
+  role: text("role").default("user").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+
+export const accounts = pgTable(
+  "accounts",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: text("type").$type<AdapterAccountType>().notNull(),
+    provider: text("provider").notNull(),
+    providerAccountId: text("provider_account_id").notNull(),
+    refresh_token: text("refresh_token"),
+    access_token: text("access_token"),
+    expires_at: integer("expires_at"),
+    token_type: text("token_type"),
+    scope: text("scope"),
+    id_token: text("id_token"),
+    session_state: text("session_state"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    compoundKey: uniqueIndex("accounts_provider_provider_account_id_uidx").on(
+      table.provider,
+      table.providerAccountId
+    ),
+    userIdIdx: index("accounts_user_id_idx").on(table.userId),
+  })
+);
+
+export type Account = typeof accounts.$inferSelect;
+export type NewAccount = typeof accounts.$inferInsert;
+
+export const sessions = pgTable(
+  "sessions",
+  {
+    sessionToken: text("session_token").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    expires: timestamp("expires", { withTimezone: true, mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("sessions_user_id_idx").on(table.userId),
+  })
+);
+
+export type Session = typeof sessions.$inferSelect;
+export type NewSession = typeof sessions.$inferInsert;
+
+export const verificationTokens = pgTable(
+  "verification_tokens",
+  {
+    identifier: text("identifier").notNull(),
+    token: text("token").notNull(),
+    expires: timestamp("expires", { withTimezone: true, mode: "date" }).notNull(),
+  },
+  (table) => ({
+    compoundKey: uniqueIndex("verification_tokens_identifier_token_uidx").on(
+      table.identifier,
+      table.token
+    ),
+  })
+);
+
+export type VerificationToken = typeof verificationTokens.$inferSelect;
+export type NewVerificationToken = typeof verificationTokens.$inferInsert;
+
+export const googleCalendarConnections = pgTable(
+  "google_calendar_connections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    calendarId: text("calendar_id").notNull().default("primary"),
+    calendarName: text("calendar_name"),
+    accountEmail: text("account_email"),
+    accountName: text("account_name"),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    tokenType: text("token_type").default("Bearer"),
+    scope: text("scope"),
+    syncEnabled: boolean("sync_enabled").notNull().default(true),
+    syncShoots: boolean("sync_shoots").notNull().default(true),
+    syncMeetings: boolean("sync_meetings").notNull().default(true),
+    syncLocationScout: boolean("sync_location_scout").notNull().default(true),
+    syncInternalEvents: boolean("sync_internal_events").notNull().default(true),
+    syncFromGoogle: boolean("sync_from_google").notNull().default(true),
+    syncToGoogle: boolean("sync_to_google").notNull().default(true),
+    nextSyncToken: text("next_sync_token"),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    lastSyncStatus: text("last_sync_status").notNull().default("idle"),
+    lastSyncMessage: text("last_sync_message"),
+    lastErrorAt: timestamp("last_error_at", { withTimezone: true }),
+    status: text("status")
+      .$type<"connected" | "disconnected" | "revoked" | "error">()
+      .notNull()
+      .default("connected"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    organizationIdx: index("google_calendar_connections_org_idx").on(table.organizationId),
+    orgCalendarUnique: uniqueIndex("google_calendar_connections_org_cal_uidx").on(
+      table.organizationId,
+      table.calendarId
+    ),
+  })
+);
+
+export type GoogleCalendarConnection = typeof googleCalendarConnections.$inferSelect;
+export type NewGoogleCalendarConnection = typeof googleCalendarConnections.$inferInsert;
+
+export const shootCalendarSync = pgTable(
+  "shoot_calendar_sync",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    shootId: uuid("shoot_id")
+      .notNull()
+      .references(() => shoots.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull().default("google"),
+    externalCalendarId: text("external_calendar_id").notNull().default("primary"),
+    externalEventId: text("external_event_id").notNull(),
+    externalEventEtag: text("external_event_etag"),
+    externalICalUID: text("external_ical_uid"),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }).defaultNow().notNull(),
+    lastSyncHash: text("last_sync_hash"),
+    syncStatus: text("sync_status").notNull().default("synced"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    orgShootProviderUnique: uniqueIndex("shoot_calendar_sync_org_shoot_provider_uidx").on(
+      table.organizationId,
+      table.shootId,
+      table.provider
+    ),
+    orgProviderEventUnique: uniqueIndex("shoot_calendar_sync_org_provider_event_uidx").on(
+      table.organizationId,
+      table.provider,
+      table.externalEventId
+    ),
+    shootIdIdx: index("shoot_calendar_sync_shoot_idx").on(table.shootId),
+  })
+);
+
+export type ShootCalendarSync = typeof shootCalendarSync.$inferSelect;
+export type NewShootCalendarSync = typeof shootCalendarSync.$inferInsert;

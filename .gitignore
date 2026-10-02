@@ -4,8 +4,12 @@
 .pnp.js
 .yarn/install-state.gz
 
-# testing
+# testing & test artifacts
 /coverage
+/test-results/
+/playwright-report/
+/blob-report/
+/.playwright/
 
 # next.js
 /.next/
@@ -18,13 +22,16 @@
 .DS_Store
 *.pem
 
-# debug
+# debug & logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# local env files
+# local & production env files
 .env*.local
+.env.production*
+.env.staging*
 
 # vercel
 .vercel
@@ -36,3 +43,16 @@ next-env.d.ts
 # Codex temporary verification workspaces
 .codex-agy-sandbox-test/
 .codex-verify-m0-t03/
+.codex-verify-*/
+_verify_m5_exact*/
+
+.vercel
+
+# local QA / benchmark artifacts
+.tmp-*
+qa-*
+.ui-backups/
+.codex-live*-review/
+.codex/*.log
+.codex/*.patch
+.codex/*audit*.mjs

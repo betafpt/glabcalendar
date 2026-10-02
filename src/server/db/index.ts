@@ -17,7 +17,10 @@ const globalForDb = globalThis as unknown as {
 };
 
 export const conn =
-  globalForDb.conn ?? postgres(getServerConfig().databaseUrl);
+  globalForDb.conn ??
+  postgres(getServerConfig().databaseUrl, {
+    connect_timeout: 5,
+  });
 
 if (process.env.NODE_ENV !== "production") {
   globalForDb.conn = conn;

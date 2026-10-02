@@ -66,6 +66,14 @@ export const serverEnvSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
     .default("development"),
+  AUTH_SECRET: z
+    .string()
+    .trim()
+    .min(1)
+    .default("glab-development-auth-secret-change-in-production-min32"),
+  AUTH_URL: z.string().trim().optional(),
+  GOOGLE_CLIENT_ID: z.string().trim().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().trim().optional(),
 });
 
 export type RawServerEnv = z.infer<typeof serverEnvSchema>;
@@ -81,6 +89,14 @@ export interface ServerConfig {
   timezone: string;
   nodeEnv: "development" | "test" | "production";
   NODE_ENV: "development" | "test" | "production";
+  authSecret: string;
+  AUTH_SECRET: string;
+  authUrl?: string;
+  AUTH_URL?: string;
+  googleClientId?: string;
+  GOOGLE_CLIENT_ID?: string;
+  googleClientSecret?: string;
+  GOOGLE_CLIENT_SECRET?: string;
   isProduction: boolean;
   isDevelopment: boolean;
   isTest: boolean;
@@ -105,6 +121,10 @@ export function parseServerConfig(
     DATABASE_URL: rawDatabaseUrl,
     APP_TIMEZONE: rawTimezone === undefined ? undefined : rawTimezone,
     NODE_ENV: env.NODE_ENV,
+    AUTH_SECRET: env.AUTH_SECRET,
+    AUTH_URL: env.AUTH_URL ?? env.NEXTAUTH_URL,
+    GOOGLE_CLIENT_ID: env.GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET: env.GOOGLE_CLIENT_SECRET,
   });
 
   return Object.freeze({
@@ -115,10 +135,58 @@ export function parseServerConfig(
     timezone: parsed.APP_TIMEZONE,
     nodeEnv: parsed.NODE_ENV,
     NODE_ENV: parsed.NODE_ENV,
+    authSecret: parsed.AUTH_SECRET,
+    AUTH_SECRET: parsed.AUTH_SECRET,
+    authUrl: parsed.AUTH_URL,
+    AUTH_URL: parsed.AUTH_URL,
+    googleClientId: parsed.GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_ID: parsed.GOOGLE_CLIENT_ID,
+    googleClientSecret: parsed.GOOGLE_CLIENT_SECRET,
+    GOOGLE_CLIENT_SECRET: parsed.GOOGLE_CLIENT_SECRET,
     isProduction: parsed.NODE_ENV === "production",
     isDevelopment: parsed.NODE_ENV === "development",
     isTest: parsed.NODE_ENV === "test",
   });
+}
+
+/**
+ * Validates production environment safety requirements.
+ */
+export function validateProductionEnvironment(
+  targetConfig: ServerConfig = getServerConfig()
+): { valid: boolean; issues: string[] } {
+  const issues: string[] = [];
+  if (targetConfig.isProduction) {
+    if (
+      !targetConfig.authSecret ||
+      targetConfig.authSecret.startsWith("glab-development-") ||
+      targetConfig.authSecret.length < 32
+    ) {
+      issues.push("AUTH_SECRET must be set to a secure string with at least 32 characters in production.");
+    }
+
+    if (!targetConfig.googleClientId) {
+      issues.push("GOOGLE_CLIENT_ID must be set in production.");
+    }
+
+    if (!targetConfig.googleClientSecret) {
+      issues.push("GOOGLE_CLIENT_SECRET must be set in production.");
+    }
+
+    if (!targetConfig.authUrl) {
+      issues.push("AUTH_URL (or NEXTAUTH_URL) must be set in production.");
+    } else {
+      try {
+        const authUrl = new URL(targetConfig.authUrl);
+        if (authUrl.protocol !== "https:") {
+          issues.push("AUTH_URL must use HTTPS in production.");
+        }
+      } catch {
+        issues.push("AUTH_URL must be a valid absolute URL in production.");
+      }
+    }
+  }
+  return { valid: issues.length === 0, issues };
 }
 
 /**

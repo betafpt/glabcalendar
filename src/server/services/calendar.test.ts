@@ -41,6 +41,36 @@ describe("calendar service", () => {
     expect(repo.listRange).toHaveBeenCalledWith(shoot.organizationId, shoot.startsAt, shoot.endsAt, {});
   });
 
+  it("forwards crew member and equipment filters to the repository", async () => {
+    const repo = repository();
+    const service = createCalendarService(repo);
+    const start = new Date("2026-09-01T00:00:00Z");
+    const end = new Date("2026-10-01T00:00:00Z");
+    const crewMemberId = "00000000-0000-0000-0000-000000000200";
+    const equipmentItemId = "00000000-0000-0000-0000-000000000300";
+
+    await service.list(shoot.organizationId, start, end, { crewMemberId, equipmentItemId });
+    expect(repo.listRange).toHaveBeenCalledWith(shoot.organizationId, start, end, {
+      crewMemberId,
+      equipmentItemId,
+    });
+  });
+
+  it("drops individual invalid or empty filter values while preserving valid ones", async () => {
+    const repo = repository();
+    const service = createCalendarService(repo);
+    const start = new Date("2026-09-01T00:00:00Z");
+    const end = new Date("2026-10-01T00:00:00Z");
+    const projectId = "00000000-0000-0000-0000-000000000100";
+
+    await service.list(shoot.organizationId, start, end, {
+      projectId,
+      crewMemberId: "bad-uuid",
+      equipmentItemId: "",
+    });
+    expect(repo.listRange).toHaveBeenCalledWith(shoot.organizationId, start, end, { projectId });
+  });
+
   it("rejects an empty or reversed range before querying", async () => {
     const repo = repository();
     const service = createCalendarService(repo);

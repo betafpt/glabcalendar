@@ -8,6 +8,7 @@ import {
   parseServerConfig,
   resetServerConfig,
   serverConfig,
+  validateProductionEnvironment,
 } from "./config";
 
 describe("tailwind.config boundary test", () => {
@@ -187,6 +188,89 @@ describe("Server environment config boundary", () => {
       delete process.env.APP_TIMEZONE;
       expect(serverConfig.databaseUrl).toBe(validPostgresUrl);
       expect(serverConfig.appTimezone).toBe("Asia/Ho_Chi_Minh");
+    });
+  });
+
+  describe("Auth environment configuration", () => {
+    it("provides default AUTH_SECRET when not explicitly specified", () => {
+      const config = parseServerConfig({ DATABASE_URL: validPostgresUrl });
+      expect(config.authSecret).toBeDefined();
+      expect(config.authSecret.length).toBeGreaterThanOrEqual(16);
+      expect(config.AUTH_SECRET).toBe(config.authSecret);
+    });
+
+    it("parses custom AUTH_SECRET and Google OAuth credentials", () => {
+      const config = parseServerConfig({
+        DATABASE_URL: validPostgresUrl,
+        AUTH_SECRET: "custom-production-super-secret-key-1234567890",
+        AUTH_URL: "https://calendar.glab.vn",
+        GOOGLE_CLIENT_ID: "google-client-id-123.apps.googleusercontent.com",
+        GOOGLE_CLIENT_SECRET: "google-client-secret-xyz",
+      });
+      expect(config.authSecret).toBe("custom-production-super-secret-key-1234567890");
+      expect(config.authUrl).toBe("https://calendar.glab.vn");
+      expect(config.googleClientId).toBe("google-client-id-123.apps.googleusercontent.com");
+      expect(config.googleClientSecret).toBe("google-client-secret-xyz");
+    });
+  });
+
+  describe("Production environment validation", () => {
+    it("flags weak or development auth secrets in production mode", () => {
+      const prodConfig = parseServerConfig({
+        DATABASE_URL: validPostgresUrl,
+        NODE_ENV: "production",
+      });
+      const check = validateProductionEnvironment(prodConfig);
+      expect(check.valid).toBe(false);
+      expect(check.issues.length).toBeGreaterThan(0);
+      expect(check.issues[0]).toContain("AUTH_SECRET");
+    });
+
+    it.each([
+      ["GOOGLE_CLIENT_ID", { GOOGLE_CLIENT_SECRET: "secret", AUTH_URL: "https://calendar.glab.vn" }],
+      ["GOOGLE_CLIENT_SECRET", { GOOGLE_CLIENT_ID: "client.apps.googleusercontent.com", AUTH_URL: "https://calendar.glab.vn" }],
+      ["AUTH_URL", { GOOGLE_CLIENT_ID: "client.apps.googleusercontent.com", GOOGLE_CLIENT_SECRET: "secret" }],
+    ])("flags missing %s in production mode", (missingKey, authEnv) => {
+      const prodConfig = parseServerConfig({
+        DATABASE_URL: validPostgresUrl,
+        NODE_ENV: "production",
+        AUTH_SECRET: "abcdefghijklmnopqrstuvwxyz1234567890_very_secure_key",
+        ...authEnv,
+      });
+      const check = validateProductionEnvironment(prodConfig);
+      expect(check.valid).toBe(false);
+      expect(check.issues.some((issue) => issue.includes(missingKey))).toBe(true);
+    });
+
+    it("requires a valid HTTPS AUTH_URL in production", () => {
+      for (const AUTH_URL of ["not-a-url", "http://calendar.glab.vn"]) {
+        const prodConfig = parseServerConfig({
+          DATABASE_URL: validPostgresUrl,
+          NODE_ENV: "production",
+          AUTH_SECRET: "abcdefghijklmnopqrstuvwxyz1234567890_very_secure_key",
+          AUTH_URL,
+          GOOGLE_CLIENT_ID: "client.apps.googleusercontent.com",
+          GOOGLE_CLIENT_SECRET: "secret",
+        });
+        const check = validateProductionEnvironment(prodConfig);
+        expect(check.valid).toBe(false);
+        expect(check.issues.some((issue) => issue.includes("AUTH_URL"))).toBe(true);
+      }
+    });
+
+    it("accepts valid production configuration", () => {
+      const strongSecret = "abcdefghijklmnopqrstuvwxyz1234567890_very_secure_key";
+      const prodConfig = parseServerConfig({
+        DATABASE_URL: "postgresql://prod_user:strong_password@prod-db.example.com:5432/glab_prod",
+        NODE_ENV: "production",
+        AUTH_SECRET: strongSecret,
+        AUTH_URL: "https://calendar.glab.vn",
+        GOOGLE_CLIENT_ID: "prod-client-id.apps.googleusercontent.com",
+        GOOGLE_CLIENT_SECRET: "prod-client-secret",
+      });
+      const check = validateProductionEnvironment(prodConfig);
+      expect(check.valid).toBe(true);
+      expect(check.issues).toHaveLength(0);
     });
   });
 

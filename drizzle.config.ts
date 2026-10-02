@@ -1,5 +1,8 @@
 import { defineConfig } from "drizzle-kit";
+import { loadEnvConfig } from "@next/env";
 import { parseServerConfig } from "./src/lib/config";
+
+loadEnvConfig(process.cwd());
 
 /**
  * Resolves the database connection URL for Drizzle Kit commands.

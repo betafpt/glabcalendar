@@ -1,131 +1,121 @@
-# G.Lab Calendar — Implementation Tasks
+﻿# G.Lab Calendar — Fast-track Execution Plan
 
-Each task is intentionally small so Gemini can implement one task at a time and Codex can review/accept it independently.
+This is the authoritative roadmap for getting the app live quickly. The old micro-task roadmap remains in `TASKS.atomic.md` only as historical reference.
 
-## Milestone 0 — Foundation
+## Operating model
 
-### M0-T01 — Initialize the application shell
+- Gemini is the primary implementation engine. Codex leads architecture, scopes each run, reviews diffs, runs QA, and rejects regressions.
+- For every UI/UX change, Gemini is the default implementation owner. This includes layout, styling, responsive behavior, component presentation, interaction polish, visual consistency, and user-facing localization. Codex coordinates, reviews, tests, and handles supporting logic/backend changes when required.
+- Optimize for end-to-end outcomes, not small tickets. Each task below is a large vertical slice that Gemini should complete in one run unless a real blocker appears.
+- Preserve unrelated work already in the repository.
+- Google Calendar Sync is part of the go-live critical path.
+- AI stays in the product plan but begins only after production is live and the core app has been validated.
 
-**Implementation agent:** Gemini
+## LIVE-01 — Make the core app production-complete
 
-Create a Next.js application in the existing workspace using App Router, React, TypeScript strict mode, and Tailwind CSS.
+Goal: finish everything required for a real user to sign in and use the scheduling app end-to-end without dead ends.
 
-Required outcomes:
-- App runs locally.
-- `src/` layout is used.
-- TypeScript strict mode enabled.
-- Tailwind configured and a minimal root page renders.
-- Scripts exist for `dev`, `lint`, `typecheck`, and `build`.
-- No product feature implementation yet.
+Gemini owns in one implementation run:
+- Finish/repair Auth.js Google login and protected routes.
+- Finish Drizzle auth schema/migrations and production environment validation.
+- Verify the complete user journey: Dashboard → Projects → Shoots → Crew/Equipment → assignments → conflicts → checklist/readiness → Calendar.
+- Fix broken CRUD/actions, dead buttons, route/navigation failures, loading/error/empty states encountered in that journey.
+- Keep desktop/mobile responsive behavior and the current G.Lab visual system.
+- Update only the meaningful integration/E2E tests needed to prove that journey.
 
-Acceptance criteria:
-- `npm run lint` passes.
-- `npm run typecheck` passes.
-- `npm run build` passes.
-- Root page renders without runtime error.
+Release gate:
+- Core journey works end-to-end.
+- Conflict rules still allow adjacent bookings and reject overlapping active bookings.
+- Auth and migration paths are internally consistent.
+- `npm run lint`, `npm run typecheck`, `npm run test`, critical Playwright flow, and `npm run build` pass.
 
-### M0-T02 — Add test infrastructure
-- Add Vitest and minimal configuration.
-- Add `npm test` (or `npm run test`) script.
-- Add one meaningful smoke test for a pure utility/config boundary, avoiding tests that merely mirror implementation.
+## LIVE-02 — Google Calendar Sync end-to-end
 
-### M0-T03 — Establish source architecture
-- Create the top-level module folders from `ARCHITECTURE.md`.
-- Add path aliases where useful.
-- Add short module boundary documentation.
+Goal: make Google Calendar a reliable production feature before launch.
 
-### M0-T04 — Add environment validation
-- Add typed environment parsing using Zod.
-- Support database URL and application timezone defaults.
-- Fail fast on invalid server configuration.
+Gemini owns in one implementation run:
+- Connect/disconnect Google Calendar from the existing Integrations UI using minimum required scopes.
+- Persist provider connection, selected calendar, token/sync metadata, external event IDs, and sync cursors/state safely.
+- Sync G.Lab shoots to Google Calendar for create/update/cancel without duplicates.
+- Reconcile relevant Google Calendar changes back into the app with an explicit source-of-truth/conflict rule.
+- Make all sync operations idempotent and retry-safe.
+- Handle expired/revoked credentials, provider/API errors, and reconnection cleanly.
+- Surface connection state, last sync, manual retry/sync action, and actionable errors in UI.
+- Add provider-boundary tests and one critical integration/E2E sync flow where practical.
 
-### M0-T05 — Add PostgreSQL ORM foundation
-- Choose Prisma or Drizzle.
-- Add database client, migration workflow, and local/dev configuration documentation.
-- No business tables beyond organization bootstrap in this task.
+Release gate:
+- Repeated sync produces no duplicates.
+- Create/update/cancel behavior is deterministic.
+- Token revoke/expiry and provider failure paths do not break the app.
+- `npm run lint`, `npm run typecheck`, `npm run test`, relevant E2E, and `npm run build` pass.
 
-### M0-T06 — Create initial organization schema
-- Implement `organizations` table.
-- Add migration.
-- Add repository access needed to read/create the initial organization.
+## LIVE-03 — Ship-ready QA and deployment package
 
-## Milestone 1 — Core domain
+Goal: remove launch blockers and leave the project ready for staging, then production.
 
-### M1-T01 — Projects schema and repository
-### M1-T02 — Projects application service
-### M1-T03 — Projects list/create UI
-### M1-T04 — Projects detail/edit UI
-### M1-T05 — Shoots schema and repository
-### M1-T06 — Shoot validation and application service
-### M1-T07 — Shoots list/create UI
-### M1-T08 — Shoot detail/edit UI
-### M1-T09 — Crew schema and repository
-### M1-T10 — Crew application service
-### M1-T11 — Crew list/create/edit UI
-### M1-T12 — Equipment schema and repository
-### M1-T13 — Equipment application service
-### M1-T14 — Equipment list/create/edit UI
+Gemini owns in one implementation run:
+- Perform final responsive/accessibility/loading/error-state cleanup on critical routes.
+- Remove demo/test assumptions from production behavior.
+- Verify clean migration order and startup against a fresh database path.
+- Clean/quarantine generated test artifacts and tighten `.gitignore` where needed.
+- Run full regression and fix application failures found by QA.
+- Produce `GO_LIVE_CHECKLIST.md` containing only external steps that truly require owner credentials/provider/domain/deployment access.
 
-## Milestone 2 — Scheduling engine
+Release gate:
+- `npm run lint`
+- `npm run typecheck`
+- `npm run test`
+- `npm run test:e2e`
+- `npm run build`
+- No known P0/P1 blocker remains.
 
-### M2-T01 — Pure interval overlap utility
-- Implement canonical half-open interval overlap logic.
-- Unit-test adjacent, nested, identical, partial-overlap, and non-overlap cases.
+## RELEASE — Staging → production
 
-### M2-T02 — Crew assignment schema/repository
-### M2-T03 — Crew conflict query
-### M2-T04 — Crew assignment application service
-### M2-T05 — Crew assignment UI
-### M2-T06 — Equipment booking schema/repository
-### M2-T07 — Equipment conflict query
-### M2-T08 — Equipment booking application service
-### M2-T09 — Equipment booking UI
-### M2-T10 — Unified conflict presentation component
+Codex performs the final release gate in the original workspace after LIVE-01..LIVE-03 are accepted. External actions requiring credentials or account ownership happen here: production PostgreSQL provisioning, Google OAuth/Calendar configuration, production secrets, staging deployment, live smoke test, domain/callback setup, then production release.
 
-Acceptance focus for Milestone 2:
-- Overlapping active shoot assignments are rejected with typed conflict details.
-- Adjacent shoots are allowed.
-- Cancelled shoots do not block a resource.
-- Editing a shoot does not conflict with itself.
+## POST-LIVE-01 — AI Assistant
 
-## Milestone 3 — Calendar and Today Dashboard
+Starts only after the released app and Google Calendar sync have been validated in production.
 
-### M3-T01 — Calendar query model
-### M3-T02 — Calendar month view
-### M3-T03 — Calendar week/day views
-### M3-T04 — Calendar filters
-### M3-T05 — Today Dashboard query model
-### M3-T06 — Today Dashboard UI
-### M3-T07 — Dashboard conflict/readiness summaries
+Goal:
+- Keep the existing AI UI/product direction.
+- Implement read-only schedule/readiness/conflict/project assistance first.
+- Route every AI action through the same application-service layer and validation rules as the normal UI.
+- Add mutations only after read-only behavior is proven stable.
 
-## Milestone 4 — Shoot workflow
+## Execution order
 
-### M4-T01 — Checklist schema/repository
-### M4-T02 — Checklist application service
-### M4-T03 — Checklist UI on shoot detail
-### M4-T04 — Checklist completion interaction
-### M4-T05 — Shoot readiness summary
+`LIVE-01 → LIVE-02 → LIVE-03 → staging → production → production validation → POST-LIVE-01`
 
-## Milestone 5 — Production hardening
+## QA-UI-01 — Consolidated real-browser interaction sweep
 
-### M5-T01 — Loading, empty, and error states
-### M5-T02 — Responsive layout pass
-### M5-T03 — Accessibility review/fixes
-### M5-T04 — Seed/demo dataset
-### M5-T05 — Critical integration tests
-### M5-T06 — Critical Playwright flow tests
-### M5-T07 — Final lint/typecheck/test/build review
+Goal: keep every browser-visible defect from the current UI audit in one task until the complete interactive surface has been verified.
 
-## Review workflow for every Gemini task
+Current status (2026-10-01):
+- Fixed: Plus Jakarta Sans is applied at runtime for Vietnamese (`html lang="vi"`).
+- Fixed: Clients supports add, search, edit, add contact, notes, and meaningful tab content using browser-local storage.
+- Fixed: Settings rows without implemented destinations are visibly disabled/marked “Coming soon” instead of looking clickable.
+- Fixed: AI send/voice actions are disabled and explicitly labeled as preview-only until a real AI service exists.
+- Fresh real-browser audit on `http://localhost:3011`: 95 checks, 89 passed, 6 failed. Desktop/mobile top-level routes pass HTTP, Plus Jakarta Sans, `lang="vi"`, and horizontal-overflow checks.
+- Fresh browser interaction checks pass for Calendar navigation/filter surfaces, Client search/add/edit/contact/notes, AI preview disabled state, and Settings unavailable-state labeling.
+- Current 6 browser failures are all DB-dependent detail surfaces: Crew edit/upload, Equipment edit/upload, Project edit, Shoot edit. The pages render the database-unavailable state instead of their forms because the configured Supabase pooler is unreachable from this environment.
+- Crew/equipment upload implementation remains present in source; upload/preview/remove cannot be re-exercised in the fresh runtime until the DB-backed detail pages can load.
+- Remaining verification blocker: restore database connectivity, then re-run DB-backed create/edit persistence for Projects, Shoots, Crew, Equipment and live Google Calendar state.
+- Product gap to keep visible: the Client → Projects tab currently reports the project count but is not backed by a dedicated client/project relationship model.
 
-1. Gemini implements only the assigned task.
-2. Codex inspects the diff against the task acceptance criteria.
-3. Codex runs the relevant tests plus lint/typecheck/build as appropriate.
-4. Codex either marks the task accepted or returns precise implementation corrections.
-5. Only after acceptance does work advance to the next task.
+Fresh evidence:
+- `qa-browser/audit.json` generated 2026-10-01T07:56:23.966Z against port 3011.
+- `npm run typecheck` PASS.
+- `npm test` PASS: 22 files, 137/137 tests.
+- `npm run build` PASS; only existing `@next/next/no-img-element` warnings on the media preview/detail images.
 
-## First implementation task
+Exit gate:
+- Re-run desktop and mobile browser sweep after database connectivity is restored.
+- Verify every enabled control causes the expected state/navigation change and no enabled dead control remains.
+- Verify crew/equipment upload + save + reload persistence against the real database.
+- Verify project/shoot CRUD and Google Calendar connect/sync flows against real services.
+- `npm run typecheck`, `npm test`, `npm run build`, and browser QA all pass with a fresh audit log.
 
-**M0-T01 — Initialize the application shell.**
+## Leader rule
 
-Gemini should create the Next.js + React + TypeScript + Tailwind foundation only, with strict TypeScript and working `dev`, `lint`, `typecheck`, and `build` scripts. Do not implement Projects, Shoots, Calendar, Crew, Equipment, checklists, authentication, database schema, or integrations in this task.
+Do not create new micro-tasks for ordinary implementation details. Codex should send Gemini the whole current LIVE task, review the returned diff, request fixes in the same run when needed, and move immediately to the next LIVE task after QA passes.

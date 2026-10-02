@@ -21,6 +21,21 @@ export function createShootRepository(database: Database) {
         .orderBy(desc(shoots.startsAt));
     },
 
+    async listSummaries(organizationId: string) {
+      return database
+        .select({
+          id: shoots.id,
+          projectId: shoots.projectId,
+          title: shoots.title,
+          status: shoots.status,
+          startsAt: shoots.startsAt,
+          locationName: shoots.locationName,
+        })
+        .from(shoots)
+        .where(eq(shoots.organizationId, organizationId))
+        .orderBy(desc(shoots.startsAt));
+    },
+
     async findById(
       organizationId: string,
       shootId: string
@@ -36,6 +51,32 @@ export function createShootRepository(database: Database) {
         )
         .limit(1);
       return shoot ?? null;
+    },
+
+    async listForProject(organizationId: string, projectId: string) {
+      return database
+        .select({
+          id: shoots.id,
+          title: shoots.title,
+          status: shoots.status,
+          startsAt: shoots.startsAt,
+          locationName: shoots.locationName,
+        })
+        .from(shoots)
+        .where(
+          and(
+            eq(shoots.organizationId, organizationId),
+            eq(shoots.projectId, projectId)
+          )
+        )
+        .orderBy(desc(shoots.startsAt));
+    },
+
+    async listProjectStatuses(organizationId: string) {
+      return database
+        .select({ projectId: shoots.projectId, status: shoots.status })
+        .from(shoots)
+        .where(eq(shoots.organizationId, organizationId));
     },
 
     async create(input: CreateShootInput): Promise<Shoot> {
@@ -61,6 +102,9 @@ export function createShootRepository(database: Database) {
         .returning();
       return shoot ?? null;
     },
+    async remove(organizationId: string, shootId: string): Promise<boolean> {
+      const deleted = await database.delete(shoots).where(and(eq(shoots.organizationId, organizationId), eq(shoots.id, shootId))).returning({ id: shoots.id });
+      return deleted.length > 0;
+    },
   };
 }
-

@@ -80,6 +80,7 @@ export interface ShootRepositoryPort {
       notes: string | null;
     }>
   ): Promise<Shoot | null>;
+  remove(organizationId: string, shootId: string): Promise<boolean>;
 }
 
 export type ShootServiceResult<T> =
@@ -149,6 +150,13 @@ export function createShootService(repository: ShootRepositoryPort) {
       }
 
       return { ok: true, data: shoot };
+    },
+
+    async remove(organizationId: string, shootId: string): Promise<ShootServiceResult<null>> {
+      const removed = await repository.remove(organizationId, shootId);
+      return removed
+        ? { ok: true, data: null }
+        : { ok: false, error: { code: "NOT_FOUND", message: "Shoot not found." } };
     },
   };
 }

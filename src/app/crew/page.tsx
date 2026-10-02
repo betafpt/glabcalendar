@@ -1,19 +1,267 @@
 import Link from "next/link";
-import { getServerConfig } from "@/lib/config";
+import { AppScreen } from "@/components/ui/app-screen";
+import { Avatar } from "@/components/ui/avatar";
+import { DatabaseErrorBanner } from "@/components/ui/database-error-banner";
+import { EmptyState } from "@/components/ui/empty-state";
+import { LocalizedText } from "@/components/ui/localized-text";
+import { Calendar, Add, ArrowRight2, Profile2User } from "@/components/ui/iconsax";
+import { calendarRange } from "@/lib/calendar-range";
 import { errorMessage } from "@/lib/error-message";
-import type { CrewMember } from "@/server/db/schema";
+import { getInitialOrganization } from "@/server/organization-context";
 import { CrewForm } from "./crew-form";
+
 export const dynamic = "force-dynamic";
 
-async function load(): Promise<{ crew: CrewMember[]; error?: string }> {
+type TodayCrewStatus = {
+  hasShootToday: boolean;
+  time?: string;
+  shootTitle?: string;
+};
+
+type CrewSummary = {
+  id: string;
+  name: string;
+  defaultRole: string | null;
+  email: string | null;
+  status: string;
+};
+
+async function load(): Promise<{
+  crew: CrewSummary[];
+  todayScheduleMap: Map<string, TodayCrewStatus>;
+  error?: string;
+}> {
   try {
-    const [{ db }, { createOrganizationRepository }, { createCrewRepository }] = await Promise.all([import("@/server/db"), import("@/server/db/organizations"), import("@/server/db/crew")]);
-    const organization = await createOrganizationRepository(db).getOrCreateInitial({ name: "G.Lab Studio", timezone: getServerConfig().appTimezone });
-    return { crew: await createCrewRepository(db).list(organization.id) };
-  } catch (error) { return { crew: [], error: errorMessage(error, "Unable to load crew.") }; }
+    const [
+      { db },
+      { createCrewRepository },
+      { createCalendarRepository },
+      { createCrewAssignmentRepository },
+    ] = await Promise.all([
+      import("@/server/db"),
+      import("@/server/db/crew"),
+      import("@/server/db/calendar"),
+      import("@/server/db/crew-assignments"),
+    ]);
+
+    const organization = await getInitialOrganization();
+
+    const range = calendarRange("day", new Date(), organization.timezone);
+    const [crew, todayShoots, assignments] = await Promise.all([
+      createCrewRepository(db).listSummaries(organization.id),
+      createCalendarRepository(db).listRange(organization.id, range.start, range.end),
+      createCrewAssignmentRepository(db).listForRange(organization.id, range.start, range.end),
+    ]);
+
+    const todayScheduleMap = new Map<string, TodayCrewStatus>();
+    const shootById = new Map(todayShoots.map((shoot) => [shoot.id, shoot]));
+
+    // Map today's shoots to crew members using one assignment query instead of
+    // one query per shoot.
+    for (const { assignment, crewMember } of assignments) {
+      const shoot = shootById.get(assignment.shootId);
+      if (!shoot || todayScheduleMap.has(crewMember.id)) continue;
+
+      const timeStr = new Intl.DateTimeFormat("en", {
+        timeZone: organization.timezone,
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(new Date(shoot.startsAt));
+
+      todayScheduleMap.set(crewMember.id, {
+        hasShootToday: true,
+        time: timeStr,
+        shootTitle: shoot.title,
+      });
+    }
+
+    return { crew, todayScheduleMap };
+  } catch (error) {
+    return {
+      crew: [],
+      todayScheduleMap: new Map(),
+      error: errorMessage(error, "Unable to load crew."),
+    };
+  }
 }
 
-export default async function CrewPage() {
-  const { crew, error } = await load();
-  return <main className="min-h-screen bg-slate-50 px-5 py-8 sm:px-8"><div className="mx-auto max-w-6xl"><div className="mb-8"><Link href="/" className="text-sm font-medium text-slate-500 hover:text-slate-900">← G.Lab Calendar</Link><h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">Crew</h1><p className="mt-1 text-sm text-slate-500">Manage your production team.</p></div><div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(340px,1fr)]"><section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="mb-4 text-lg font-semibold">Crew members</h2>{error ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Database unavailable: {error}</div> : crew.length === 0 ? <div className="rounded-xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">No crew members yet.</div> : <div className="divide-y divide-slate-100">{crew.map((member) => <Link key={member.id} href={`/crew/${member.id}`} className="flex items-center justify-between py-4"><div><p className="font-medium text-slate-900">{member.name}</p><p className="text-sm text-slate-500">{member.defaultRole || "No default role"}</p></div><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs capitalize text-slate-600">{member.status}</span></Link>)}</div>}</section><aside className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="text-lg font-semibold">New crew member</h2><p className="mb-5 mt-1 text-sm text-slate-500">Add a person to your team.</p><CrewForm /></aside></div></div></main>;
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((v) => v[0])
+    .join("");
+
+const rowTones = ["bg-coral", "bg-lilac", "bg-mint", "bg-yellow", "bg-sky"];
+
+export default async function CrewPage({
+  searchParams,
+}: {
+  searchParams?: { status?: string };
+}) {
+  const { crew, todayScheduleMap, error } = await load();
+  const currentFilter = searchParams?.status || "all";
+
+  const filteredCrew = crew.filter((member) => {
+    if (currentFilter === "all") return true;
+    if (currentFilter === "available") return member.status === "active";
+    if (currentFilter === "busy" || currentFilter === "on-set") return member.status !== "active";
+    return true;
+  });
+
+  const now = new Date();
+  const currentMonthYear = new Intl.DateTimeFormat("en", {
+    month: "short",
+    year: "numeric",
+  }).format(now).toUpperCase();
+
+  const filterTabs = [
+    { id: "all", vi: "Tất cả", en: "All" },
+    { id: "available", vi: "Sẵn sàng", en: "Available" },
+    { id: "busy", vi: "Đang bận / On Set", en: "Busy / On Set" },
+  ];
+
+  return (
+    <AppScreen className="max-w-5xl pt-5 sm:pt-7">
+      <div className="flex items-center justify-between gap-3 pr-14 lg:pr-0">
+        <p className="text-[15px] font-black uppercase tracking-[-.02em]">{currentMonthYear}</p>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/calendar"
+            className="grid size-11 place-items-center rounded-full bg-surface text-base font-bold shadow-soft transition hover:bg-white active:scale-press"
+          >
+            <Calendar size={18} variant="Linear" />
+            <span className="sr-only"><LocalizedText vi="Xem lịch" en="View calendar" /></span>
+          </Link>
+          <details className="relative">
+            <summary
+              aria-label="Add crew"
+              className="grid size-11 cursor-pointer list-none place-items-center rounded-full bg-ink text-2xl text-white shadow-soft transition hover:bg-pink active:scale-press [&::-webkit-details-marker]:hidden"
+            >
+              <Add size={20} variant="Linear" />
+              <span className="sr-only"><LocalizedText vi="Thêm nhân sự" en="Add crew" /></span>
+            </summary>
+            <div className="absolute right-0 top-14 z-30 w-[min(88vw,380px)] rounded-r28 border border-stroke bg-surface p-5 shadow-nav">
+              <p className="mb-4 text-xs font-black uppercase tracking-[.18em] text-pink">
+                <LocalizedText vi="Thêm nhân sự" en="Add crew" />
+              </p>
+              <CrewForm />
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <header className="mt-3.5 sm:mt-5">
+        <h1 className="font-display text-[clamp(3rem,15vw,7.5rem)] font-black uppercase leading-[0.96] tracking-[-0.045em] sm:leading-[0.92]">
+          <LocalizedText vi="NHÂN SỰ" en="CREW" /><span className="text-pink">*</span>
+        </h1>
+        <p className="mt-3 sm:mt-3.5 text-[11px] font-black uppercase tracking-[.38em] text-secondary">
+          <LocalizedText vi="ĐỘI NGŨ SẢN XUẤT" en="PRODUCTION TEAM" />
+        </p>
+      </header>
+
+      <div className="mt-4 flex gap-2 overflow-x-auto pb-1 text-[12px] font-bold [scrollbar-width:none]">
+        {filterTabs.map((tab) => {
+          const isActive = currentFilter === tab.id;
+          return (
+            <Link
+              key={tab.id}
+              href={tab.id === "all" ? "/crew" : `/crew?status=${tab.id}`}
+              className={`min-w-[92px] shrink-0 rounded-pill px-4 py-2.5 text-center text-xs font-black transition duration-fast active:scale-press ${
+                isActive
+                  ? "bg-ink text-white shadow-soft"
+                  : "border border-stroke/70 bg-surface text-ink shadow-soft hover:border-ink/20 hover:bg-white"
+              }`}
+            >
+              <LocalizedText vi={tab.vi} en={tab.en} />
+            </Link>
+          );
+        })}
+      </div>
+
+      {error ? <DatabaseErrorBanner error={error} className="mt-4" /> : null}
+
+      <section className="mt-4 space-y-2.5">
+        {filteredCrew.map((member, index) => {
+          const available = member.status === "active";
+          const todayStatus = todayScheduleMap.get(member.id);
+
+          return (
+            <Link
+              key={member.id}
+              href={`/crew/${member.id}`}
+              className={`grid min-h-[96px] grid-cols-[56px_minmax(0,1fr)_84px_24px] items-center gap-2 rounded-r22 border border-ink/5 p-2.5 transition duration-base active:scale-[.99] sm:min-h-[104px] sm:grid-cols-[72px_1fr_130px_auto] sm:gap-3 sm:p-3 ${
+                rowTones[index % rowTones.length]
+              }`}
+            >
+              <div className="relative">
+                <Avatar initials={initials(member.name)} className="size-14 bg-white/80 text-lg sm:size-[72px] sm:text-xl" />
+                <span
+                  className={`absolute bottom-0 right-0 size-3.5 rounded-full border-2 border-white sm:size-4 ${
+                    available ? "bg-success" : "bg-error"
+                  }`}
+                />
+              </div>
+
+              <div className="min-w-0 pr-1">
+                <h2 className="line-clamp-1 font-display text-[1.25rem] font-black leading-tight tracking-[-.025em] sm:text-[1.75rem] sm:leading-[.9]">
+                  {member.name}
+                </h2>
+                <p className="mt-0.5 truncate text-xs font-bold text-ink sm:mt-1 sm:text-sm">
+                  {member.defaultRole || <LocalizedText vi="Nhân sự" en="Crew" />}
+                </p>
+                <div className="mt-1 flex items-center gap-1.5 text-[10px] font-bold text-secondary sm:mt-2 sm:gap-2 sm:text-[11px]">
+                  <span className={`size-2 rounded-full sm:size-2.5 ${available ? "bg-success" : "bg-warning"}`} />
+                  <span className="shrink-0">
+                    {available ? (
+                      <LocalizedText vi="Sẵn sàng" en="Available" />
+                    ) : (
+                      <LocalizedText vi="Tạm ngưng" en="Inactive" />
+                    )}
+                  </span>
+                  {member.email ? (
+                    <>
+                      <span>·</span>
+                      <span className="truncate max-w-[80px] sm:max-w-xs">{member.email}</span>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="min-w-0 self-stretch rounded-r16 bg-white/45 px-2 py-1.5 sm:min-w-[130px] sm:px-3 sm:py-2">
+                <p className="text-[9px] font-black uppercase text-secondary sm:text-[10px]">TODAY</p>
+                {todayStatus?.hasShootToday ? (
+                  <>
+                    <p className="mt-0.5 truncate text-[11px] font-black text-ink sm:mt-1 sm:text-xs">{todayStatus.time}</p>
+                    <p className="mt-0.5 line-clamp-2 text-[9px] font-bold leading-tight text-ink sm:text-[11px]">
+                      {todayStatus.shootTitle}
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-1 text-[11px] font-bold text-secondary sm:mt-2 sm:text-xs">
+                    <LocalizedText vi="Trống lịch" en="Free" />
+                  </p>
+                )}
+              </div>
+
+              <span className="grid size-6 place-items-center rounded-full bg-white/80 text-base sm:size-9 sm:text-xl">
+                <ArrowRight2 size={16} variant="Linear" />
+              </span>
+            </Link>
+          );
+        })}
+
+        {!filteredCrew.length && !error ? (
+          <EmptyState
+            icon={<Profile2User size={28} variant="Bold" className="text-pink" />}
+            titleVi="Không tìm thấy nhân sự nào"
+            titleEn="No crew members found"
+            descriptionVi="Không có nhân sự nào phù hợp với bộ lọc hiện tại. Nhấn nút + bên trên để thêm thành viên mới."
+            descriptionEn="No crew members match the selected filter. Tap the + button above to add a new member."
+          />
+        ) : null}
+      </section>
+    </AppScreen>
+  );
 }

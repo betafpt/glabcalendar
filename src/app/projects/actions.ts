@@ -1,12 +1,17 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { getServerConfig } from "@/lib/config";
 import { errorMessage } from "@/lib/error-message";
+import type { DeleteActionState } from "@/components/ui/delete-entity-button";
+import { CALENDAR_PROJECT_OPTIONS_TAG } from "@/server/calendar-filter-options";
+import { SHOOT_DETAIL_PROJECT_OPTIONS_TAG } from "@/server/shoot-detail-options";
 
 export type ProjectActionState = {
   ok: boolean;
   message?: string;
+  messageVi?: string;
+  messageEn?: string;
   fieldErrors?: Record<string, string[] | undefined>;
 };
 
@@ -53,17 +58,22 @@ export async function createProjectAction(
     if (!result.ok) {
       return {
         ok: false,
-        message: result.error.message,
+        messageVi: result.error.code === "NOT_FOUND" ? "Không tìm thấy dự án." : "Dữ liệu dự án chưa hợp lệ.",
+        messageEn: result.error.message,
         fieldErrors: result.error.fieldErrors,
       };
     }
 
     revalidatePath("/projects");
-    return { ok: true, message: "Project created." };
+    revalidateTag(CALENDAR_PROJECT_OPTIONS_TAG);
+    revalidateTag(SHOOT_DETAIL_PROJECT_OPTIONS_TAG);
+    return { ok: true, messageVi: "Đã tạo dự án.", messageEn: "Project created." };
   } catch (error) {
+    console.error("createProjectAction", error);
     return {
       ok: false,
-      message: errorMessage(error, "Unable to create the project right now."),
+      messageVi: "Không thể tạo dự án lúc này.",
+      messageEn: "Unable to create the project right now.",
     };
   }
 }
@@ -87,18 +97,41 @@ export async function updateProjectAction(
     if (!result.ok) {
       return {
         ok: false,
-        message: result.error.message,
+        messageVi: result.error.code === "NOT_FOUND" ? "Không tìm thấy dự án." : "Dữ liệu dự án chưa hợp lệ.",
+        messageEn: result.error.message,
         fieldErrors: result.error.fieldErrors,
       };
     }
 
     revalidatePath("/projects");
     revalidatePath(`/projects/${projectId}`);
-    return { ok: true, message: "Project updated." };
+    revalidateTag(CALENDAR_PROJECT_OPTIONS_TAG);
+    revalidateTag(SHOOT_DETAIL_PROJECT_OPTIONS_TAG);
+    return { ok: true, messageVi: "Đã cập nhật dự án.", messageEn: "Project updated." };
   } catch (error) {
+    console.error("updateProjectAction", error);
     return {
       ok: false,
-      message: errorMessage(error, "Unable to update the project right now."),
+      messageVi: "Không thể cập nhật dự án lúc này.",
+      messageEn: "Unable to update the project right now.",
     };
+  }
+}
+
+export async function deleteProjectAction(projectId: string, _state: DeleteActionState, _formData: FormData): Promise<DeleteActionState> {
+  try {
+    const { organization, service } = await getProjectContext();
+    const result = await service.remove(organization.id, projectId);
+    if (!result.ok) return { ok: false, messageVi: "Không tìm thấy dự án.", messageEn: "Project not found." };
+    revalidatePath("/projects");
+    revalidatePath("/shoots");
+    revalidatePath("/calendar");
+    revalidatePath("/");
+    revalidateTag(CALENDAR_PROJECT_OPTIONS_TAG);
+    revalidateTag(SHOOT_DETAIL_PROJECT_OPTIONS_TAG);
+    return { ok: true };
+  } catch (error) {
+    console.error("deleteProjectAction", error);
+    return { ok: false, messageVi: "Không thể xóa dự án lúc này.", messageEn: "Unable to delete the project right now." };
   }
 }

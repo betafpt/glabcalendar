@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { AppShell } from "@/components/app-shell";
+import { LanguageProvider } from "@/components/language-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -6,15 +8,16 @@ export const metadata: Metadata = {
   description: "Production scheduling web app for filmmakers and photographers",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">
-        {children}
+    <html lang="vi" suppressHydrationWarning>
+      <body
+        className="min-h-screen bg-bg font-sans text-ink antialiased"
+        style={{ fontFamily: '"Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif' }}
+      >
+        <LanguageProvider>
+          <AppShell>{children}</AppShell>
+        </LanguageProvider>
       </body>
     </html>
   );

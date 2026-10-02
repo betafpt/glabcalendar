@@ -60,6 +60,7 @@ export interface ProjectRepositoryPort {
       notes: string | null;
     }>
   ): Promise<Project | null>;
+  remove(organizationId: string, projectId: string): Promise<boolean>;
 }
 
 export type ProjectServiceResult<T> =
@@ -130,6 +131,13 @@ export function createProjectService(repository: ProjectRepositoryPort) {
       }
 
       return { ok: true, data: project };
+    },
+
+    async remove(organizationId: string, projectId: string): Promise<ProjectServiceResult<null>> {
+      const removed = await repository.remove(organizationId, projectId);
+      return removed
+        ? { ok: true, data: null }
+        : { ok: false, error: { code: "NOT_FOUND", message: "Project not found." } };
     },
   };
 }

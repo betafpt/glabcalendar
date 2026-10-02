@@ -1,0 +1,6 @@
+Paste this into Codex:
+
+Read AGENTS.md and the entire UI handoff package first.
+Open and inspect all 4 images in reference/primary/ before proposing implementation changes.
+Then read docs/CODEX_MASTER_PROMPT.md and follow it exactly.
+Do not code yet. First inspect the repository, map the approved screens to the existing architecture, propose the component/token strategy and implementation order, and stop for approval.

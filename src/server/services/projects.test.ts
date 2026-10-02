@@ -21,6 +21,7 @@ function repository(): ProjectRepositoryPort {
     findById: vi.fn(async () => project),
     create: vi.fn(async () => project),
     update: vi.fn(async () => project),
+    remove: vi.fn(async () => true),
   };
 }
 
@@ -64,5 +65,15 @@ describe("project service", () => {
     }
     expect(repo.create).not.toHaveBeenCalled();
   });
-});
 
+  it("removes a project and reports missing projects", async () => {
+    const repo = repository();
+    const service = createProjectService(repo);
+    await expect(service.remove(project.organizationId, project.id)).resolves.toEqual({ ok: true, data: null });
+    vi.mocked(repo.remove).mockResolvedValueOnce(false);
+    await expect(service.remove(project.organizationId, project.id)).resolves.toEqual({
+      ok: false,
+      error: { code: "NOT_FOUND", message: "Project not found." },
+    });
+  });
+});

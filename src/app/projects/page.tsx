@@ -1,100 +1,245 @@
 import Link from "next/link";
-import { getServerConfig } from "@/lib/config";
+import { AppScreen } from "@/components/ui/app-screen";
+import { DatabaseErrorBanner } from "@/components/ui/database-error-banner";
+import { EmptyState } from "@/components/ui/empty-state";
+import { LocalizedText } from "@/components/ui/localized-text";
+import { LocalizedDateTime } from "@/components/ui/localized-date-time";
+import { StatusText } from "@/components/ui/status-text";
+import { VideoSquare, TickCircle, Clock, ArrowRight2, Folder2 } from "@/components/ui/iconsax";
 import { errorMessage } from "@/lib/error-message";
 import type { Project } from "@/server/db/schema";
+import { getInitialOrganization } from "@/server/organization-context";
 import { ProjectCreateForm } from "./project-create-form";
 
 export const dynamic = "force-dynamic";
 
 async function loadProjects(): Promise<{
   projects: Project[];
+  shootStatuses: Array<{ projectId: string | null; status: string }>;
   error?: string;
 }> {
   try {
-    const [{ db }, { createOrganizationRepository }, { createProjectRepository }] =
-      await Promise.all([
-        import("@/server/db"),
-        import("@/server/db/organizations"),
-        import("@/server/db/projects"),
-      ]);
+    const [
+      { db },
+      { createProjectRepository },
+      { createShootRepository },
+    ] = await Promise.all([
+      import("@/server/db"),
+      import("@/server/db/projects"),
+      import("@/server/db/shoots"),
+    ]);
 
-    const organization = await createOrganizationRepository(db).getOrCreateInitial({
-      name: "G.Lab Studio",
-      timezone: getServerConfig().appTimezone,
-    });
-    const projects = await createProjectRepository(db).list(organization.id);
-    return { projects };
+    const organization = await getInitialOrganization();
+
+    const [projects, shootStatuses] = await Promise.all([
+      createProjectRepository(db).list(organization.id),
+      createShootRepository(db).listProjectStatuses(organization.id),
+    ]);
+
+    return { projects, shootStatuses };
   } catch (error) {
     return {
       projects: [],
+      shootStatuses: [],
       error: errorMessage(error, "Unable to load projects right now."),
     };
   }
 }
 
-export default async function ProjectsPage() {
-  const { projects, error } = await loadProjects();
+const tones = ["bg-coral", "bg-lilac", "bg-mint", "bg-yellow", "bg-sky"];
+
+function StatusBadge({ status }: { status: string }) {
+  const value = status.toLowerCase();
+  if (value === "active" || value === "shooting") {
+    return <LocalizedText vi="ĐANG QUAY" en="SHOOTING" />;
+  }
+  if (value === "completed" || value === "delivered") {
+    return <LocalizedText vi="HOÀN THÀNH" en="DELIVERED" />;
+  }
+  if (value === "archived") {
+    return <LocalizedText vi="LƯU TRỮ" en="ARCHIVED" />;
+  }
+  return <LocalizedText vi="TIỀN KỲ" en="PRE-PRODUCTION" />;
+}
+
+export default async function ProjectsPage({
+  searchParams,
+}: {
+  searchParams?: { status?: string };
+}) {
+  const { projects, shootStatuses, error } = await loadProjects();
+  const currentFilter = searchParams?.status || "all";
+
+  const filteredProjects = projects.filter((project) => {
+    if (currentFilter === "all") return true;
+    const s = project.status.toLowerCase();
+    if (currentFilter === "pre-production") return s === "planned" || s === "pre-production";
+    if (currentFilter === "shooting") return s === "active" || s === "shooting";
+    if (currentFilter === "editing") return s === "editing";
+    if (currentFilter === "delivered") return s === "completed" || s === "delivered";
+    return true;
+  });
+
+  const now = new Date();
 
   return (
-    <main className="min-h-screen bg-slate-50 px-5 py-8 sm:px-8">
-      <div className="mx-auto max-w-6xl">
-        <div className="mb-8 flex items-center justify-between gap-4">
-          <div>
-            <Link href="/" className="text-sm font-medium text-slate-500 hover:text-slate-900">
-              ← G.Lab Calendar
-            </Link>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">Projects</h1>
-            <p className="mt-1 text-sm text-slate-500">Manage productions and client work.</p>
-          </div>
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">All projects</h2>
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-                {projects.length}
-              </span>
+    <AppScreen className="max-w-5xl pt-5 sm:pt-7">
+      <div className="flex items-center justify-between gap-3 pr-14 lg:pr-0">
+        <p className="text-[15px] font-black uppercase tracking-[-.02em]"><LocalizedDateTime value={now.toISOString()} options={{ month: "short", year: "numeric" }} uppercase /></p>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/calendar"
+            className="grid size-11 place-items-center rounded-full border border-stroke/70 bg-surface text-ink shadow-soft transition hover:border-ink/20 hover:bg-white active:scale-press"
+          >
+            📅
+            <span className="sr-only"><LocalizedText vi="Xem lịch" en="View calendar" /></span>
+          </Link>
+          <details className="relative">
+            <summary
+              className="grid size-11 cursor-pointer list-none place-items-center rounded-full bg-ink text-2xl font-light text-white shadow-soft transition duration-fast hover:bg-pink active:scale-press select-none [&::-webkit-details-marker]:hidden"
+            >
+              +
+              <span className="sr-only"><LocalizedText vi="Tạo dự án" en="Create project" /></span>
+            </summary>
+            <div className="absolute -right-12 sm:right-0 top-14 z-30 max-h-[85vh] w-[min(calc(100vw-32px),380px)] overflow-y-auto rounded-r28 border border-stroke bg-surface p-5 shadow-nav">
+              <p className="mb-4 text-xs font-black uppercase tracking-[.18em] text-pink">
+                <LocalizedText vi="Dự án mới" en="New project" />
+              </p>
+              <ProjectCreateForm />
             </div>
-
-            {error ? (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                Database unavailable: {error}
-              </div>
-            ) : projects.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">
-                No projects yet. Create the first project from the form.
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {projects.map((project) => (
-                  <Link
-                    key={project.id}
-                    href={`/projects/${project.id}`}
-                    className="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-slate-900">{project.name}</p>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {project.clientName || "No client"}
-                      </p>
-                    </div>
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium capitalize text-slate-600">
-                      {project.status}
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <aside className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold">New project</h2>
-            <p className="mb-5 mt-1 text-sm text-slate-500">Create a project before scheduling shoots.</p>
-            <ProjectCreateForm />
-          </aside>
+          </details>
         </div>
       </div>
-    </main>
+
+      <header className="mt-3.5 sm:mt-5 min-w-0">
+        <h1 className="max-w-full font-display text-[clamp(2.75rem,13vw,7.5rem)] font-black uppercase leading-[0.96] tracking-[-0.045em] sm:leading-[0.92] [overflow-wrap:anywhere] sm:whitespace-nowrap">
+          <LocalizedText vi="DỰ ÁN" en="PROJECTS" /><span className="text-pink">*</span>
+        </h1>
+        <p className="mt-3 sm:mt-3.5 text-[11px] font-black uppercase tracking-[.38em] text-secondary">
+          <LocalizedText vi="TẤT CẢ DỰ ÁN" en="ALL PRODUCTIONS" />
+        </p>
+      </header>
+
+      <div className="mt-4 flex gap-2 overflow-x-auto pb-1 text-[12px] font-bold [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {[
+          { id: "all", vi: "Tất cả", en: "All" },
+          { id: "pre-production", vi: "Tiền kỳ", en: "Pre-Production" },
+          { id: "shooting", vi: "Đang quay", en: "Shooting" },
+          { id: "editing", vi: "Hậu kỳ", en: "Editing" },
+          { id: "delivered", vi: "Bàn giao", en: "Delivered" },
+        ].map((filter) => {
+          const isActive = currentFilter === filter.id;
+          return (
+            <Link
+              key={filter.id}
+              href={filter.id === "all" ? "/projects" : `/projects?status=${filter.id}`}
+              className={`shrink-0 rounded-pill px-4 py-2.5 text-xs font-black transition duration-fast active:scale-press ${
+                isActive
+                  ? "bg-ink text-white shadow-soft"
+                  : "border border-stroke/70 bg-surface text-ink shadow-soft hover:border-ink/20 hover:bg-white"
+              }`}
+            >
+              <LocalizedText vi={filter.vi} en={filter.en} />
+            </Link>
+          );
+        })}
+      </div>
+
+      {error ? <DatabaseErrorBanner error={error} className="mt-4" /> : null}
+
+      <section className="mt-4 space-y-3">
+        {filteredProjects.map((project, index) => {
+          const projectShoots = shootStatuses.filter((s) => s.projectId === project.id);
+          const shootCount = projectShoots.length;
+          const completedShoots = projectShoots.filter((s) => s.status === "completed").length;
+          const progress =
+            project.status === "completed"
+              ? 100
+              : shootCount > 0
+              ? Math.round((completedShoots / shootCount) * 100)
+              : project.status === "active"
+              ? 50
+              : 0;
+
+          const tone = tones[index % tones.length];
+
+          return (
+            <Link
+              key={project.id}
+              href={`/projects/${project.id}`}
+              className={`group grid grid-cols-[104px_1fr] sm:grid-cols-[136px_1fr] gap-3 rounded-r22 sm:rounded-r28 border border-ink/8 p-2.5 sm:p-3.5 shadow-soft transition duration-base hover:-translate-y-0.5 hover:shadow-md hover:border-ink/15 active:scale-press ${tone}`}
+            >
+              <div className="relative h-full min-h-[132px] overflow-hidden rounded-r16 bg-ink/10 select-none">
+                <div className="absolute inset-0 bg-[linear-gradient(145deg,rgba(9,9,9,0.12),transparent_42%),radial-gradient(circle_at_72%_28%,rgba(255,255,255,0.85),transparent_34%)]" />
+                <div className="absolute inset-x-[18%] bottom-[16%] top-[18%] rounded-r16 bg-ink/80 shadow-[10px_10px_0_rgba(255,255,255,0.45)] sm:shadow-[12px_12px_0_rgba(255,255,255,0.45)]" />
+                <div className="absolute inset-0 grid place-items-center font-display text-3xl sm:text-4xl font-black uppercase text-white/40">
+                  GL
+                </div>
+                <div className="absolute inset-x-2 bottom-2 truncate rounded-pill bg-white/90 px-2 py-1 text-center text-[9px] font-black uppercase tracking-wider text-ink shadow-sm backdrop-blur-xs">
+                  {project.clientName || "G.Lab"}
+                </div>
+              </div>
+
+              <div className="min-w-0 py-1 pr-1">
+                <div className="flex items-start justify-between gap-2.5">
+                  <h2 className="min-w-0 flex-1 font-display text-[clamp(1.4rem,4.8vw,2.4rem)] font-black uppercase leading-[0.92] tracking-[-0.04em] text-ink break-words line-clamp-2">
+                    {project.name}
+                  </h2>
+                  <span className="shrink-0 rounded-pill border border-ink/15 bg-white/50 backdrop-blur-xs px-2.5 py-1 text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-ink shadow-xs">
+                    <StatusBadge status={project.status} />
+                  </span>
+                </div>
+
+                <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] sm:text-[12px] font-bold text-secondary">
+                  <span className="truncate">
+                    ⌖ {project.clientName || <LocalizedText vi="Dự án nội bộ" en="Internal project" />}
+                  </span>
+                  {project.startsOn ? (
+                    <span className="shrink-0 text-secondary/80">
+                      · ◷ {project.endsOn && project.endsOn !== project.startsOn ? `${project.startsOn} → ${project.endsOn}` : project.startsOn}
+                    </span>
+                  ) : null}
+                </p>
+
+                <div className="mt-3.5 sm:mt-4 grid grid-cols-3 gap-1 sm:gap-2 border-t border-ink/10 pt-2.5 sm:pt-3 text-[9px] sm:text-[10px] font-black uppercase text-secondary">
+                  <span className="truncate">
+                    <span className="inline-flex items-center gap-1"><VideoSquare size={12} variant="Linear" className="shrink-0" /> {shootCount}</span> <span className="font-bold"><LocalizedText vi="BUỔI QUAY" en={shootCount === 1 ? "SHOOT" : "SHOOTS"} /></span>
+                  </span>
+                  <span className="truncate">
+                    <span className="inline-flex items-center gap-1"><TickCircle size={12} variant="Linear" className="shrink-0" /> {completedShoots}</span> <span className="font-bold"><LocalizedText vi="HOÀN TẤT" en="DONE" /></span>
+                  </span>
+                  <span className="truncate">
+                    <span className="inline-flex items-center gap-1"><Clock size={12} variant="Linear" className="shrink-0" /> <span className="font-bold"><StatusText status={project.status} /></span></span>
+                  </span>
+                </div>
+
+                <div className="mt-3 flex items-center justify-end gap-2.5">
+                  <span className="text-[10px] sm:text-[11px] font-black text-ink">{progress}%</span>
+                  <span className="h-2 w-14 sm:w-16 overflow-hidden rounded-pill bg-white/60 shadow-inner">
+                    <span
+                      className="block h-full rounded-pill bg-pink transition-[width] duration-slow"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </span>
+                  <span className="grid size-8 sm:size-9 place-items-center rounded-full bg-white/80 text-ink text-base sm:text-lg font-black shadow-soft transition group-hover:translate-x-0.5 group-hover:bg-white active:scale-press">
+                    <ArrowRight2 size={16} variant="Linear" />
+                  </span>
+                </div>
+              </div>
+            </Link>
+          );
+        })}
+
+        {!filteredProjects.length && !error ? (
+          <EmptyState
+            icon={<Folder2 size={28} variant="Bold" className="text-pink" />}
+            titleVi="Chưa có dự án"
+            titleEn="No projects yet"
+            descriptionVi="Không tìm thấy dự án nào phù hợp với bộ lọc hiện tại."
+            descriptionEn="No projects found matching the selected filter."
+          />
+        ) : null}
+      </section>
+    </AppScreen>
   );
 }

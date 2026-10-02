@@ -10,6 +10,18 @@ export function createEquipmentRepository(database: Database) {
     list(organizationId: string): Promise<EquipmentItem[]> {
       return database.select().from(equipmentItems).where(eq(equipmentItems.organizationId, organizationId)).orderBy(asc(equipmentItems.name));
     },
+    listSummaries(organizationId: string) {
+      return database
+        .select({
+          id: equipmentItems.id,
+          name: equipmentItems.name,
+          category: equipmentItems.category,
+          status: equipmentItems.status,
+        })
+        .from(equipmentItems)
+        .where(eq(equipmentItems.organizationId, organizationId))
+        .orderBy(asc(equipmentItems.name));
+    },
     async findById(organizationId: string, equipmentItemId: string): Promise<EquipmentItem | null> {
       const [item] = await database.select().from(equipmentItems).where(and(eq(equipmentItems.organizationId, organizationId), eq(equipmentItems.id, equipmentItemId))).limit(1);
       return item ?? null;
@@ -22,6 +34,10 @@ export function createEquipmentRepository(database: Database) {
     async update(organizationId: string, equipmentItemId: string, input: UpdateEquipmentItemInput): Promise<EquipmentItem | null> {
       const [item] = await database.update(equipmentItems).set({ ...input, updatedAt: new Date() }).where(and(eq(equipmentItems.organizationId, organizationId), eq(equipmentItems.id, equipmentItemId))).returning();
       return item ?? null;
+    },
+    async remove(organizationId: string, equipmentItemId: string): Promise<boolean> {
+      const deleted = await database.delete(equipmentItems).where(and(eq(equipmentItems.organizationId, organizationId), eq(equipmentItems.id, equipmentItemId))).returning({ id: equipmentItems.id });
+      return deleted.length > 0;
     },
   };
 }

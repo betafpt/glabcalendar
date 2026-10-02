@@ -1,15 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 import { errorMessage } from "./error-message";
 
-describe("errorMessage", () => {
-  it("returns the first validation issue instead of the serialized Zod issue list", () => {
-    const result = z.object({ DATABASE_URL: z.string({ required_error: "DATABASE_URL is required" }) }).safeParse({});
-    if (result.success) throw new Error("Expected validation failure");
-    expect(errorMessage(result.error, "fallback")).toBe("DATABASE_URL is required");
+describe("errorMessage utility", () => {
+  it("extracts message from standard Error instances", () => {
+    const error = new Error("Database connection timed out");
+    expect(errorMessage(error, "Fallback")).toBe("Database connection timed out");
   });
 
-  it("falls back for non-errors", () => {
-    expect(errorMessage(null, "Unable to load data.")).toBe("Unable to load data.");
+  it("extracts message from Zod-like validation issues", () => {
+    const zodError = {
+      issues: [{ message: "Start time must be before end time" }],
+    };
+    expect(errorMessage(zodError, "Fallback")).toBe("Start time must be before end time");
+  });
+
+  it("returns fallback when error is unknown or empty", () => {
+    expect(errorMessage(null, "Fallback message")).toBe("Fallback message");
+    expect(errorMessage(undefined, "Fallback message")).toBe("Fallback message");
+    expect(errorMessage({}, "Fallback message")).toBe("Fallback message");
+    expect(errorMessage(new Error("   "), "Fallback message")).toBe("Fallback message");
   });
 });

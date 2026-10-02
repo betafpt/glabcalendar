@@ -24,6 +24,14 @@ export function createProjectRepository(database: Database) {
         .orderBy(desc(projects.createdAt));
     },
 
+    async listOptions(organizationId: string) {
+      return database
+        .select({ id: projects.id, name: projects.name })
+        .from(projects)
+        .where(eq(projects.organizationId, organizationId))
+        .orderBy(desc(projects.createdAt));
+    },
+
     async findById(
       organizationId: string,
       projectId: string
@@ -66,6 +74,9 @@ export function createProjectRepository(database: Database) {
 
       return project ?? null;
     },
+    async remove(organizationId: string, projectId: string): Promise<boolean> {
+      const deleted = await database.delete(projects).where(and(eq(projects.organizationId, organizationId), eq(projects.id, projectId))).returning({ id: projects.id });
+      return deleted.length > 0;
+    },
   };
 }
-

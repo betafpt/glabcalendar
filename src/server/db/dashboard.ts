@@ -3,43 +3,58 @@ import { createCalendarRepository } from "./calendar";
 import { createChecklistRepository } from "./checklists";
 import { createCrewAssignmentRepository } from "./crew-assignments";
 import { createEquipmentBookingRepository } from "./equipment-bookings";
+import { createProjectRepository } from "./projects";
+import {
+  calculateDashboardReadiness,
+  createDashboardService,
+  type DashboardReadinessSummary,
+  type DashboardShoot,
+  type TodayDashboardQueryOptions,
+  type TodayDashboardSummary,
+} from "@/server/services/dashboard";
 
-export type DashboardShoot = {
-  shoot: Awaited<ReturnType<ReturnType<typeof createCalendarRepository>["listRange"]>>[number];
-  crewCount: number;
-  equipmentCount: number;
-  checklistTotal: number;
-  checklistCompleted: number;
-  conflictCount: number;
+export { calculateDashboardReadiness };
+export type {
+  DashboardReadinessSummary,
+  DashboardShoot,
+  TodayDashboardQueryOptions,
+  TodayDashboardSummary,
 };
 
 export function createDashboardRepository(database: Database) {
-  const calendar = createCalendarRepository(database);
-  const crew = createCrewAssignmentRepository(database);
-  const equipment = createEquipmentBookingRepository(database);
-  const checklists = createChecklistRepository(database);
+  const service = createDashboardService({
+    calendar: createCalendarRepository(database),
+    projects: createProjectRepository(database),
+    crewAssignments: createCrewAssignmentRepository(database),
+    equipmentBookings: createEquipmentBookingRepository(database),
+    checklists: createChecklistRepository(database),
+  });
+
   return {
-    async listToday(organizationId: string, start: Date, end: Date): Promise<DashboardShoot[]> {
-      const shoots = await calendar.listRange(organizationId, start, end);
-      return Promise.all(shoots.map(async (shoot) => {
-        const [crewRows, equipmentRows, checklistItems] = await Promise.all([
-          crew.listForShoot(organizationId, shoot.id),
-          equipment.listForShoot(organizationId, shoot.id),
-          checklists.listForShoot(organizationId, shoot.id),
-        ]);
-        const conflictGroups = await Promise.all([
-          ...crewRows.map(({ crewMember }) => crew.findConflicts(organizationId, crewMember.id, shoot.id, shoot.startsAt, shoot.endsAt)),
-          ...equipmentRows.map(({ equipmentItem }) => equipment.findConflicts(organizationId, equipmentItem.id, shoot.id, shoot.startsAt, shoot.endsAt)),
-        ]);
-        return {
-          shoot,
-          crewCount: crewRows.length,
-          equipmentCount: equipmentRows.length,
-          checklistTotal: checklistItems.length,
-          checklistCompleted: checklistItems.filter((item) => item.isCompleted).length,
-          conflictCount: conflictGroups.reduce((sum, conflicts) => sum + conflicts.length, 0),
-        };
-      }));
+    async listToday(
+      organizationId: string,
+      startOrTimezoneOrOptions?: Date | string | TodayDashboardQueryOptions,
+      maybeEndOrAnchor?: Date
+    ): Promise<DashboardShoot[]> {
+      return service.listToday(
+        organizationId,
+        startOrTimezoneOrOptions,
+        maybeEndOrAnchor
+      );
+    },
+    async listRange(
+      organizationId: string,
+      start: Date,
+      end: Date
+    ): Promise<DashboardShoot[]> {
+      return service.listRange(organizationId, start, end);
+    },
+    async getToday(
+      organizationId: string,
+      options?: TodayDashboardQueryOptions | string,
+      anchor?: Date
+    ): Promise<TodayDashboardSummary> {
+      return service.getToday(organizationId, options, anchor);
     },
   };
 }

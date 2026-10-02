@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import type { Database } from "./index";
 import { shootChecklistItems, type NewShootChecklistItem, type ShootChecklistItem } from "./schema";
 
@@ -6,6 +6,19 @@ export function createChecklistRepository(database: Database) {
   return {
     listForShoot(organizationId: string, shootId: string): Promise<ShootChecklistItem[]> {
       return database.select().from(shootChecklistItems).where(and(eq(shootChecklistItems.organizationId, organizationId), eq(shootChecklistItems.shootId, shootId))).orderBy(asc(shootChecklistItems.sortOrder), asc(shootChecklistItems.createdAt));
+    },
+    listForShoots(organizationId: string, shootIds: string[]): Promise<ShootChecklistItem[]> {
+      if (shootIds.length === 0) return Promise.resolve([]);
+      return database
+        .select()
+        .from(shootChecklistItems)
+        .where(
+          and(
+            eq(shootChecklistItems.organizationId, organizationId),
+            inArray(shootChecklistItems.shootId, shootIds)
+          )
+        )
+        .orderBy(asc(shootChecklistItems.sortOrder), asc(shootChecklistItems.createdAt));
     },
     async create(input: Omit<NewShootChecklistItem, "id" | "createdAt" | "updatedAt">): Promise<ShootChecklistItem> {
       const [item] = await database.insert(shootChecklistItems).values(input).returning();

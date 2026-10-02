@@ -10,6 +10,16 @@ const nullableTrimmed = z
   .nullable()
   .optional();
 
+const imageDataUrl = z
+  .union([
+    z.string().regex(/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/, "Use a JPG, PNG, or WebP image."),
+    z.literal(""),
+    z.null(),
+  ])
+  .refine((value) => !value || value.length <= 950_000, "Image is too large. Please choose a smaller image.")
+  .transform((value) => (value === "" ? null : value))
+  .optional();
+
 export const crewMemberInputSchema = z.object({
   name: z.string().trim().min(1, "Crew member name is required."),
   defaultRole: nullableTrimmed,
@@ -20,6 +30,7 @@ export const crewMemberInputSchema = z.object({
     .optional(),
   status: crewStatusSchema.default("active"),
   notes: nullableTrimmed,
+  avatarDataUrl: imageDataUrl,
 });
 
 export interface CrewRepositoryPort {
@@ -33,6 +44,7 @@ export interface CrewRepositoryPort {
     email?: string | null;
     status: string;
     notes?: string | null;
+    avatarDataUrl?: string | null;
   }): Promise<CrewMember>;
   update(
     organizationId: string,
@@ -44,8 +56,10 @@ export interface CrewRepositoryPort {
       email: string | null;
       status: string;
       notes: string | null;
+      avatarDataUrl: string | null;
     }>
   ): Promise<CrewMember | null>;
+  remove(organizationId: string, crewMemberId: string): Promise<boolean>;
 }
 
 export type CrewServiceResult<T> =
@@ -85,6 +99,12 @@ export function createCrewService(repository: CrewRepositoryPort) {
       const crewMember = await repository.update(organizationId, crewMemberId, parsed.data);
       return crewMember
         ? { ok: true, data: crewMember }
+        : { ok: false, error: { code: "NOT_FOUND", message: "Crew member not found." } };
+    },
+    async remove(organizationId: string, crewMemberId: string): Promise<CrewServiceResult<null>> {
+      const removed = await repository.remove(organizationId, crewMemberId);
+      return removed
+        ? { ok: true, data: null }
         : { ok: false, error: { code: "NOT_FOUND", message: "Crew member not found." } };
     },
   };

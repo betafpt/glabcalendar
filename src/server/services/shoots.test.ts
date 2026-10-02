@@ -24,6 +24,7 @@ function repository(): ShootRepositoryPort {
     findById: vi.fn(async () => shoot),
     create: vi.fn(async () => shoot),
     update: vi.fn(async () => shoot),
+    remove: vi.fn(async () => true),
   };
 }
 
@@ -74,5 +75,10 @@ describe("shoot service", () => {
       expect(result.error.fieldErrors?.endsAt).toBeDefined();
     }
     expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it("removes a shoot", async () => {
+    const repo = repository();
+    await expect(createShootService(repo).remove(shoot.organizationId, shoot.id)).resolves.toEqual({ ok: true, data: null });
   });
 });

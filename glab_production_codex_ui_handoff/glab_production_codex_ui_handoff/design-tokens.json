@@ -1,0 +1,48 @@
+{
+  "color": {
+    "background": "#FFF1F6",
+    "surface": "#FFF9FB",
+    "ink": "#090909",
+    "inkSecondary": "#5F5960",
+    "accentPink": "#FF4F9A",
+    "lilac": "#DCD5FF",
+    "mint": "#CFF7E7",
+    "yellow": "#FFE89A",
+    "sky": "#CDE7FF",
+    "coral": "#FFC3D2",
+    "success": "#34C982",
+    "warning": "#F4B942",
+    "error": "#F0445E",
+    "stroke": "#EADDE4"
+  },
+  "spacing": {
+    "1": 4,
+    "2": 8,
+    "3": 12,
+    "4": 16,
+    "5": 20,
+    "6": 24,
+    "7": 28,
+    "8": 32
+  },
+  "radius": {
+    "sm": 10,
+    "md": 16,
+    "lg": 22,
+    "xl": 28,
+    "pill": 999
+  },
+  "motion": {
+    "pressMs": 120,
+    "chipMs": 190,
+    "cardMs": 220,
+    "pageMs": 260,
+    "sheetMs": 300,
+    "progressMs": 420
+  },
+  "layout": {
+    "mobilePagePadding": 18,
+    "minTapTarget": 44,
+    "bottomNavHeight": 64
+  }
+}

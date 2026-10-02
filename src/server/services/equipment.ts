@@ -10,6 +10,16 @@ const nullableTrimmed = z
   .nullable()
   .optional();
 
+const imageDataUrl = z
+  .union([
+    z.string().regex(/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/, "Use a JPG, PNG, or WebP image."),
+    z.literal(""),
+    z.null(),
+  ])
+  .refine((value) => !value || value.length <= 950_000, "Image is too large. Please choose a smaller image.")
+  .transform((value) => (value === "" ? null : value))
+  .optional();
+
 export const equipmentItemInputSchema = z.object({
   name: z.string().trim().min(1, "Equipment name is required."),
   category: nullableTrimmed,
@@ -17,6 +27,7 @@ export const equipmentItemInputSchema = z.object({
   serialNumber: nullableTrimmed,
   status: equipmentStatusSchema.default("available"),
   notes: nullableTrimmed,
+  imageDataUrl: imageDataUrl,
 });
 
 export interface EquipmentRepositoryPort {
@@ -30,6 +41,7 @@ export interface EquipmentRepositoryPort {
     serialNumber?: string | null;
     status: string;
     notes?: string | null;
+    imageDataUrl?: string | null;
   }): Promise<EquipmentItem>;
   update(
     organizationId: string,
@@ -41,8 +53,10 @@ export interface EquipmentRepositoryPort {
       serialNumber: string | null;
       status: string;
       notes: string | null;
+      imageDataUrl: string | null;
     }>
   ): Promise<EquipmentItem | null>;
+  remove(organizationId: string, equipmentItemId: string): Promise<boolean>;
 }
 
 export type EquipmentServiceResult<T> =
@@ -74,6 +88,12 @@ export function createEquipmentService(repository: EquipmentRepositoryPort) {
       if (!parsed.success) return validationFailure(parsed.error);
       const item = await repository.update(organizationId, equipmentItemId, parsed.data);
       return item ? { ok: true, data: item } : { ok: false, error: { code: "NOT_FOUND", message: "Equipment item not found." } };
+    },
+    async remove(organizationId: string, equipmentItemId: string): Promise<EquipmentServiceResult<null>> {
+      const removed = await repository.remove(organizationId, equipmentItemId);
+      return removed
+        ? { ok: true, data: null }
+        : { ok: false, error: { code: "NOT_FOUND", message: "Equipment item not found." } };
     },
   };
 }

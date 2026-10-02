@@ -10,6 +10,19 @@ export function createCrewRepository(database: Database) {
     list(organizationId: string): Promise<CrewMember[]> {
       return database.select().from(crewMembers).where(eq(crewMembers.organizationId, organizationId)).orderBy(asc(crewMembers.name));
     },
+    listSummaries(organizationId: string) {
+      return database
+        .select({
+          id: crewMembers.id,
+          name: crewMembers.name,
+          defaultRole: crewMembers.defaultRole,
+          email: crewMembers.email,
+          status: crewMembers.status,
+        })
+        .from(crewMembers)
+        .where(eq(crewMembers.organizationId, organizationId))
+        .orderBy(asc(crewMembers.name));
+    },
     async findById(organizationId: string, crewMemberId: string): Promise<CrewMember | null> {
       const [crewMember] = await database.select().from(crewMembers).where(and(eq(crewMembers.organizationId, organizationId), eq(crewMembers.id, crewMemberId))).limit(1);
       return crewMember ?? null;
@@ -22,6 +35,10 @@ export function createCrewRepository(database: Database) {
     async update(organizationId: string, crewMemberId: string, input: UpdateCrewMemberInput): Promise<CrewMember | null> {
       const [crewMember] = await database.update(crewMembers).set({ ...input, updatedAt: new Date() }).where(and(eq(crewMembers.organizationId, organizationId), eq(crewMembers.id, crewMemberId))).returning();
       return crewMember ?? null;
+    },
+    async remove(organizationId: string, crewMemberId: string): Promise<boolean> {
+      const deleted = await database.delete(crewMembers).where(and(eq(crewMembers.organizationId, organizationId), eq(crewMembers.id, crewMemberId))).returning({ id: crewMembers.id });
+      return deleted.length > 0;
     },
   };
 }
