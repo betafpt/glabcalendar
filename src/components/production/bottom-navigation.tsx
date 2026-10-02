@@ -5,16 +5,16 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useLanguage } from "@/components/language-provider";
 
-import { Home2, Calendar, Folder2, Profile2User, Camera } from "@/components/ui/iconsax";
+import { Home2, Calendar, MagicStar, Profile2User, Camera } from "@/components/ui/iconsax";
 
-type IconName = "today" | "calendar" | "projects" | "crew" | "gear";
+type IconName = "today" | "calendar" | "ai" | "crew" | "gear";
 
 function NavIcon({ name, active }: { name: IconName; active: boolean }) {
   const variant = active ? "Bold" : "Linear";
   const size = 20;
   if (name === "today") return <Home2 size={size} variant={variant} />;
   if (name === "calendar") return <Calendar size={size} variant={variant} />;
-  if (name === "projects") return <Folder2 size={size} variant={variant} />;
+  if (name === "ai") return <MagicStar size={size} variant={variant} />;
   if (name === "crew") return <Profile2User size={size} variant={variant} />;
   return <Camera size={size} variant={variant} />;
 }
@@ -32,7 +32,7 @@ export function BottomNavigation() {
   const items = [
     { href: "/", key: "today" as const, label: messages.nav.today },
     { href: "/calendar", key: "calendar" as const, label: messages.nav.calendar },
-    { href: "/projects", key: "projects" as const, label: messages.nav.projects },
+    { href: "/ai", key: "ai" as const, label: messages.nav.ai },
     { href: "/crew", key: "crew" as const, label: messages.nav.crew },
     { href: "/equipment", key: "gear" as const, label: messages.nav.gear },
   ];

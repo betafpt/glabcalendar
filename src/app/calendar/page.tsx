@@ -106,6 +106,10 @@ function shootDuration(startsAt: Date, endsAt: Date) {
   return `${minutes}m`;
 }
 
+function isPastOrCompletedShoot(shoot: Shoot, now: Date) {
+  return shoot.status === "completed" || shoot.endsAt.getTime() < now.getTime();
+}
+
 function getWeekDays(anchor: Date, timeZone: string): Date[] {
   const { year, month, day } = zonedDateParts(anchor, timeZone);
   const localNoon = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
@@ -434,7 +438,7 @@ export default async function CalendarPage({
   const viewItems: Array<{ view: CalendarView; vi: string; en: string }> = [
     { view: "week", vi: "Tuần", en: "Week" },
     { view: "month", vi: "Tháng", en: "Month" },
-    { view: "day", vi: "Dòng", en: "Timeline" },
+    { view: "day", vi: "Dòng thời gian", en: "Timeline" },
   ];
 
   const monthLabelsObj = monthLabels(anchor, data.timezone);
@@ -788,7 +792,7 @@ export default async function CalendarPage({
                             shoot.startsAt,
                             data.timezone,
                           )})`}
-                          className={`group/item block w-full min-w-0 rounded-[5px] sm:rounded-r10 px-1 sm:px-1.5 py-0.5 sm:py-1 text-left transition-all duration-fast hover:-translate-y-0.5 hover:shadow-sm active:scale-press ${tone}`}
+                          className={`group/item block w-full min-w-0 rounded-[5px] sm:rounded-r10 px-1 sm:px-1.5 py-0.5 sm:py-1 text-left transition-all duration-fast hover:-translate-y-0.5 hover:shadow-sm active:scale-press ${tone} ${isPastOrCompletedShoot(shoot, now) ? "opacity-45 grayscale-[35%]" : ""}`}
                         >
                           <div className="flex items-center gap-1 min-w-0">
                             <span
@@ -908,7 +912,7 @@ export default async function CalendarPage({
                 href={`/shoots/${shoot.id}`}
                 className={`grid min-h-24 grid-cols-[56px_minmax(0,1fr)] sm:grid-cols-[64px_minmax(0,1fr)] gap-3 rounded-r22 p-3 sm:p-3.5 transition-all duration-base hover:-translate-y-0.5 hover:shadow-soft active:scale-[0.99] ${
                   eventTones[index % eventTones.length]
-                }`}
+                } ${isPastOrCompletedShoot(shoot, now) ? "opacity-45 grayscale-[35%]" : ""}`}
               >
                 <div className="flex flex-col justify-center border-r border-ink/10 pr-2 sm:pr-3 text-center">
                   <span className="text-[9px] sm:text-[10px] font-black uppercase text-ink/75">
@@ -1069,6 +1073,7 @@ function CalendarWeekView({
   weekDaysList: Date[];
   grouped: Map<string, Shoot[]>;
 }) {
+  const now = new Date();
   const confirmedCount = data.shoots.filter((s) => s.status === "confirmed").length;
 
   return (
@@ -1264,7 +1269,7 @@ function CalendarWeekView({
                         shoot.startsAt,
                         data.timezone
                       )} — ${formatTime(shoot.endsAt, data.timezone)})`}
-                      className={`group/card block rounded-r14 p-2 transition-all duration-fast hover:-translate-y-0.5 hover:shadow-md active:scale-press ${tone}`}
+                      className={`group/card block rounded-r14 p-2 transition-all duration-fast hover:-translate-y-0.5 hover:shadow-md active:scale-press ${tone} ${isPastOrCompletedShoot(shoot, now) ? "opacity-45 grayscale-[35%]" : ""}`}
                     >
                       <div className="flex items-center justify-between gap-1">
                         <span className="flex items-center gap-1 min-w-0">
@@ -1416,7 +1421,7 @@ function CalendarWeekView({
                       <Link
                         key={shoot.id}
                         href={`/shoots/${shoot.id}`}
-                        className={`grid grid-cols-[56px_minmax(0,1fr)_32px] items-center gap-2 rounded-r14 p-2.5 transition-all duration-fast hover:-translate-y-0.5 active:scale-press ${tone}`}
+                        className={`grid grid-cols-[56px_minmax(0,1fr)_32px] items-center gap-2 rounded-r14 p-2.5 transition-all duration-fast hover:-translate-y-0.5 active:scale-press ${tone} ${isPastOrCompletedShoot(shoot, now) ? "opacity-45 grayscale-[35%]" : ""}`}
                       >
                         <div className="border-r border-ink/10 pr-1.5 text-center">
                           <p className="text-[11px] font-black text-ink">
@@ -1712,7 +1717,7 @@ function CalendarDayTimelineView({
                           <Link
                             key={shoot.id}
                             href={`/shoots/${shoot.id}`}
-                            className={`group/card block rounded-r20 p-3 sm:p-4 transition-all duration-base hover:-translate-y-0.5 hover:shadow-soft active:scale-[.99] ${tone}`}
+                            className={`group/card block rounded-r20 p-3 sm:p-4 transition-all duration-base hover:-translate-y-0.5 hover:shadow-soft active:scale-[.99] ${tone} ${isPastOrCompletedShoot(shoot, now) ? "opacity-45 grayscale-[35%]" : ""}`}
                           >
                             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink/10 pb-2">
                               <div className="flex items-center gap-2">
@@ -1808,7 +1813,7 @@ function CalendarDayTimelineView({
                           <Link
                             key={s.id}
                             href={`/shoots/${s.id}`}
-                            className="flex items-center justify-between rounded-r12 border border-dashed border-stroke/80 bg-surface/80 px-3 py-1.5 text-xs font-bold text-secondary hover:bg-white hover:text-ink transition-colors"
+                            className={`flex items-center justify-between rounded-r12 border border-dashed border-stroke/80 bg-surface/80 px-3 py-1.5 text-xs font-bold text-secondary hover:bg-white hover:text-ink transition-colors ${isPastOrCompletedShoot(s, now) ? "opacity-45 grayscale-[35%]" : ""}`}
                           >
                             <span className="flex items-center gap-1.5 min-w-0">
                               <span className="size-1.5 rounded-full bg-pink" />

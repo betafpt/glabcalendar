@@ -6,7 +6,7 @@ import { LocalizedText } from "@/components/ui/localized-text";
 import { LocalizedDateTime } from "@/components/ui/localized-date-time";
 import { StatusText } from "@/components/ui/status-text";
 import { StatusChip } from "@/components/ui/status-chip";
-import { Clock, Location, ArrowRight2, VideoPlay } from "@/components/ui/iconsax";
+import { Clock, Location, ArrowRight2, VideoPlay, Calendar } from "@/components/ui/iconsax";
 import { getServerConfig } from "@/lib/config";
 import { errorMessage } from "@/lib/error-message";
 import { getInitialOrganization } from "@/server/organization-context";
@@ -21,6 +21,7 @@ type ShootSummary = {
   title: string;
   status: string;
   startsAt: Date;
+  endsAt: Date;
   locationName: string | null;
 };
 
@@ -79,9 +80,9 @@ export default async function ShootsPage({
         <div className="flex items-center gap-2">
           <Link
             href="/calendar"
-            className="grid size-11 place-items-center rounded-full bg-surface text-base font-bold shadow-soft transition hover:bg-white active:scale-press"
+            className="grid size-11 place-items-center rounded-full bg-surface text-ink shadow-soft transition hover:bg-white active:scale-press"
           >
-            📅
+            <Calendar size={18} variant="Linear" />
             <span className="sr-only"><LocalizedText vi="Xem lịch" en="View calendar" /></span>
           </Link>
           <WorkspaceMenu />
@@ -139,7 +140,7 @@ export default async function ShootsPage({
             <Link
               key={shoot.id}
               href={`/shoots/${shoot.id}`}
-              className={`group rounded-r28 border border-ink/5 p-4 transition duration-base active:scale-[.99] sm:p-5 ${["bg-coral", "bg-lilac", "bg-mint", "bg-sky", "bg-yellow"][index % 5]}`}
+              className={`group rounded-r28 border border-ink/5 p-4 transition duration-base active:scale-[.99] sm:p-5 ${["bg-coral", "bg-lilac", "bg-mint", "bg-sky", "bg-yellow"][index % 5]} ${shoot.status === "completed" || shoot.endsAt.getTime() < now.getTime() ? "opacity-45 grayscale-[35%]" : ""}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">

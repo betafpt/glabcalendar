@@ -372,6 +372,32 @@ describe("Google Calendar Sync Service (LIVE-02)", () => {
   });
 
   describe("Pull changes from Google Calendar (Reconciliation & Source of Truth)", () => {
+    it("ignores Google-generated birthday events", async () => {
+      const { service } = createTestService();
+
+      pullChangesSpy.mockResolvedValueOnce({
+        changes: [
+          {
+            eventType: "updated",
+            externalEventId: "birthday-001",
+            event: {
+              summary: "Chúc mừng sinh nhật!",
+              providerEventType: "birthday",
+              start: { dateTime: "2026-10-02T00:00:00Z" },
+              end: { dateTime: "2026-10-02T23:59:59Z" },
+            },
+          },
+        ],
+        nextSyncToken: "cursor-birthday",
+      });
+
+      const result = await service.pullChangesFromGoogle(orgId);
+
+      expect(result.ok).toBe(true);
+      expect(result.pulledCount).toBe(0);
+      expect(inMemoryShoots.size).toBe(0);
+    });
+
     it("imports new Google Calendar events as planned shoots in G.Lab without duplicates", async () => {
       const { service } = createTestService();
 

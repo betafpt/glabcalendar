@@ -109,7 +109,7 @@ export function ShootCreateForm({
         </FieldCard>
         <FieldCard tone="bg-sky">
           <label htmlFor="locationAddress" className={labelClass}><LocalizedText vi="ĐỊA CHỈ" en="ADDRESS" /></label>
-          <input id="locationAddress" name="locationAddress" className={`${fieldClass} border-0 bg-surface/85`} />
+          <input id="locationAddress" name="locationAddress" placeholder="Google Maps: số nhà, đường, địa điểm..." className={`${fieldClass} border-0 bg-surface/85`} />
         </FieldCard>
       </div>
 

@@ -327,6 +327,7 @@ describe("Google Calendar Provider Boundary Tests", () => {
               {
                 id: "ev-1",
                 summary: "Brand Shoot Day 1",
+                eventType: "birthday",
                 status: "confirmed",
                 start: { dateTime: "2026-10-05T09:00:00Z" },
                 end: { dateTime: "2026-10-05T13:00:00Z" },
@@ -351,6 +352,7 @@ describe("Google Calendar Provider Boundary Tests", () => {
       expect(changes[0].eventType).toBe("updated");
       expect(changes[0].externalEventId).toBe("ev-1");
       expect(changes[0].event?.summary).toBe("Brand Shoot Day 1");
+      expect(changes[0].event?.providerEventType).toBe("birthday");
 
       expect(changes[1].eventType).toBe("deleted");
       expect(changes[1].externalEventId).toBe("ev-2");

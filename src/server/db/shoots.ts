@@ -29,6 +29,7 @@ export function createShootRepository(database: Database) {
           title: shoots.title,
           status: shoots.status,
           startsAt: shoots.startsAt,
+          endsAt: shoots.endsAt,
           locationName: shoots.locationName,
         })
         .from(shoots)

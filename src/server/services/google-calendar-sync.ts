@@ -349,6 +349,7 @@ export function createGoogleCalendarSyncService(deps: GoogleCalendarSyncServiceD
           if (!change.event) continue;
 
           const event = change.event;
+          if (event.providerEventType === "birthday") continue;
           const startsAt = new Date(event.start.dateTime);
           const endsAt = new Date(event.end.dateTime);
 

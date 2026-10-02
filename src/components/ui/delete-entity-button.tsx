@@ -45,8 +45,7 @@ export function DeleteEntityButton({
 
   useEffect(() => {
     if (state.ok) {
-      router.push(successHref);
-      router.refresh();
+      router.replace(successHref);
     }
   }, [router, state.ok, successHref]);
 

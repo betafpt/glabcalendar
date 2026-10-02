@@ -409,6 +409,7 @@ export class GoogleCalendarClient implements CalendarProvider {
         status?: string;
         start?: { dateTime?: string; date?: string; timeZone?: string };
         end?: { dateTime?: string; date?: string; timeZone?: string };
+        eventType?: string;
         updated?: string;
         extendedProperties?: { private?: Record<string, string> };
       }>;
@@ -442,6 +443,7 @@ export class GoogleCalendarClient implements CalendarProvider {
         status: isDeleted ? "cancelled" : (item.status === "tentative" ? "tentative" : "confirmed"),
         extendedProperties: item.extendedProperties,
         updated: item.updated,
+        providerEventType: item.eventType,
       };
 
       return {

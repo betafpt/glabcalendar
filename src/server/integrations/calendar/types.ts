@@ -31,6 +31,7 @@ export interface CalendarProviderEvent {
     shared?: Record<string, string>;
   };
   updated?: string; // ISO 8601 string from Google
+  providerEventType?: string;
 }
 
 export interface CalendarChange {

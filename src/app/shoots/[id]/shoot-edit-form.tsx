@@ -140,6 +140,7 @@ export function ShootEditForm({ shoot, projects, timezone }: { shoot: Shoot; pro
             id="edit-locationAddress"
             name="locationAddress"
             defaultValue={shoot.locationAddress ?? ""}
+            placeholder="Google Maps: số nhà, đường, địa điểm..."
             className={`${fieldClass} border-0 bg-surface/85`}
           />
         </FieldCard>

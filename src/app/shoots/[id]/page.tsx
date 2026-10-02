@@ -240,7 +240,18 @@ export default async function ShootDetailPage({ params }: { params: { id: string
               </div>
             </div>
             <div className="mt-2.5 grid gap-1 text-[11px] font-bold leading-4 text-secondary sm:grid-cols-3 sm:gap-2 sm:text-xs">
-              <p className="truncate">⌖ {shoot.locationName || <LocalizedText vi="Chưa có địa điểm" en="Location TBD" />}</p>
+              {shoot.locationName || shoot.locationAddress ? (
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent((shoot.locationAddress || shoot.locationName || "").trim())}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="truncate underline decoration-ink/20 underline-offset-2 hover:text-ink"
+                >
+                  ⌖ {shoot.locationName || shoot.locationAddress}
+                </a>
+              ) : (
+                <p className="truncate">⌖ <LocalizedText vi="Chưa có địa điểm" en="Location TBD" /></p>
+              )}
               <p>▣ <LocalizedDateTime value={shoot.startsAt.toISOString()} options={{ dateStyle: "medium", timeZone: timezone }} /></p>
               <p>◷ {shoot.callTime ? new Intl.DateTimeFormat("vi-VN", { timeStyle: "short", timeZone: timezone }).format(shoot.callTime) : new Intl.DateTimeFormat("vi-VN", { timeStyle: "short", timeZone: timezone }).format(shoot.startsAt)} <span className="text-[10px] font-black uppercase tracking-[.08em]"><LocalizedText vi="(Giờ tập trung)" en="(Call Time)" /></span></p>
             </div>
