@@ -17,6 +17,7 @@ export function createEquipmentRepository(database: Database) {
           name: equipmentItems.name,
           category: equipmentItems.category,
           status: equipmentItems.status,
+          imageDataUrl: equipmentItems.imageDataUrl,
         })
         .from(equipmentItems)
         .where(eq(equipmentItems.organizationId, organizationId))

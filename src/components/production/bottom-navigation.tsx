@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { useLanguage } from "@/components/language-provider";
 
 import { Home2, Calendar, Folder2, Profile2User, Camera } from "@/components/ui/iconsax";
@@ -20,7 +21,14 @@ function NavIcon({ name, active }: { name: IconName; active: boolean }) {
 
 export function BottomNavigation() {
   const pathname = usePathname();
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
   const { messages } = useLanguage();
+
+  // Reset optimistic pending state once pathname matches target
+  useEffect(() => {
+    setPendingHref(null);
+  }, [pathname]);
+
   const items = [
     { href: "/", key: "today" as const, label: messages.nav.today },
     { href: "/calendar", key: "calendar" as const, label: messages.nav.calendar },
@@ -29,26 +37,57 @@ export function BottomNavigation() {
     { href: "/equipment", key: "gear" as const, label: messages.nav.gear },
   ];
 
+  // Prioritize pending optimistic target for instant 0ms active visual response
+  const currentTarget = pendingHref !== null ? pendingHref : pathname;
+
   return (
-    <nav aria-label="Primary" className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-50 mx-auto max-w-xl rounded-[28px] border border-ink/10 bg-ink p-1.5 text-white shadow-nav lg:static lg:mx-0 lg:flex lg:h-fit lg:w-full lg:max-w-none lg:flex-col lg:gap-1 lg:rounded-r22 lg:bg-transparent lg:p-0 lg:text-ink lg:shadow-none">
-      <div className="grid grid-cols-5 lg:flex lg:flex-col lg:gap-1">
-        {items.map((item) => {
-          const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={active ? "page" : undefined}
-              className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-[22px] px-2 text-[10px] font-extrabold transition duration-fast focus-visible:ring-2 focus-visible:ring-pink focus-visible:ring-offset-2 focus-visible:ring-offset-ink active:scale-press lg:min-h-11 lg:flex-row lg:justify-start lg:gap-3 lg:px-3 lg:text-sm lg:focus-visible:ring-offset-bg ${
-                active ? "bg-pink text-white lg:bg-ink" : "text-white/68 hover:text-white lg:text-secondary lg:hover:bg-surface lg:hover:text-ink"
-              }`}
-            >
-              <NavIcon name={item.key} active={active} />
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
+    <>
+      {/* Instant Top Loading Bar for smooth transition indicator */}
+      {pendingHref !== null ? (
+        <div
+          role="progressbar"
+          aria-label="Đang chuyển trang..."
+          className="fixed top-0 inset-x-0 z-[100] h-[3px] overflow-hidden bg-pink/20 pointer-events-none"
+        >
+          <div className="h-full w-full bg-pink animate-pulse shadow-[0_0_8px_rgba(255,79,154,0.8)]" />
+        </div>
+      ) : null}
+
+      <nav
+        aria-label="Primary"
+        className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-50 mx-auto max-w-xl rounded-[28px] border border-ink/10 bg-ink p-1.5 text-white shadow-nav lg:static lg:mx-0 lg:flex lg:h-fit lg:w-full lg:max-w-none lg:flex-col lg:gap-1 lg:rounded-r22 lg:bg-transparent lg:p-0 lg:text-ink lg:shadow-none"
+      >
+        <div className="grid grid-cols-5 lg:flex lg:flex-col lg:gap-1">
+          {items.map((item) => {
+            const active =
+              item.href === "/"
+                ? currentTarget === "/"
+                : currentTarget.startsWith(item.href);
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                prefetch={true}
+                aria-current={active ? "page" : undefined}
+                onClick={() => {
+                  if (pathname !== item.href) {
+                    setPendingHref(item.href);
+                  }
+                }}
+                className={`relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-[22px] px-2 text-[10px] font-extrabold transition-all duration-fast focus-visible:ring-2 focus-visible:ring-pink focus-visible:ring-offset-2 focus-visible:ring-offset-ink active:scale-press lg:min-h-11 lg:flex-row lg:justify-start lg:gap-3 lg:px-3 lg:text-sm lg:focus-visible:ring-offset-bg ${
+                  active
+                    ? "bg-pink text-white lg:bg-ink"
+                    : "text-white/68 hover:text-white lg:text-secondary lg:hover:bg-surface lg:hover:text-ink"
+                }`}
+              >
+                <NavIcon name={item.key} active={active} />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+    </>
   );
 }

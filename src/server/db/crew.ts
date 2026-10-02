@@ -18,6 +18,7 @@ export function createCrewRepository(database: Database) {
           defaultRole: crewMembers.defaultRole,
           email: crewMembers.email,
           status: crewMembers.status,
+          avatarDataUrl: crewMembers.avatarDataUrl,
         })
         .from(crewMembers)
         .where(eq(crewMembers.organizationId, organizationId))

@@ -1,4 +1,4 @@
-﻿# Codex Task Handoff
+# Codex Task Handoff
 
 ## Goal
 Improve navigation performance across all meaningful G.Lab Calendar pages without regressing existing UI, CRUD, localization, scheduling, or conflict behavior.
@@ -79,5 +79,9 @@ Earlier invalid benchmark runs showed multi-second spikes because the sandbox bl
 - Optional cleanup: replace the three raw `<img>` usages with `next/image` if desired to remove the remaining build warnings.
 - Automated auth and Google Calendar service/client coverage is green; a real Google sign-in/consent session is still required for final end-to-end OAuth validation.
 
+- 2026-10-02 10:52: UI Instant Navigation overhaul: Added 0ms optimistic navigation + TopLoadingBar to BottomNavigation, created skeleton screens (loading.tsx) for /calendar, /projects, /crew, /equipment, /shoots. Verified PASS on typecheck and 144 unit tests.
+- 2026-10-02 11:06: BottomNavigation standardization: Removed duplicate router.push() and useTransition from Link onClick, relying solely on Next.js native Link navigation + prefetching while retaining 0ms optimistic pendingHref UI response. Verified PASS on typecheck and 144 unit tests.
+
 ## Last Updated
-2026-10-02
+2026-10-02T11:06:00+07:00
+

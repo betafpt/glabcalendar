@@ -24,6 +24,7 @@ type CrewSummary = {
   defaultRole: string | null;
   email: string | null;
   status: string;
+  avatarDataUrl: string | null;
 };
 
 async function load(): Promise<{
@@ -196,7 +197,15 @@ export default async function CrewPage({
               }`}
             >
               <div className="relative">
-                <Avatar initials={initials(member.name)} className="size-14 bg-white/80 text-lg sm:size-[72px] sm:text-xl" />
+                {member.avatarDataUrl ? (
+                  <img
+                    src={member.avatarDataUrl}
+                    alt={`Avatar ${member.name}`}
+                    className="size-14 rounded-full border border-ink/10 bg-white/80 object-cover sm:size-[72px]"
+                  />
+                ) : (
+                  <Avatar initials={initials(member.name)} className="size-14 bg-white/80 text-lg sm:size-[72px] sm:text-xl" />
+                )}
                 <span
                   className={`absolute bottom-0 right-0 size-3.5 rounded-full border-2 border-white sm:size-4 ${
                     available ? "bg-success" : "bg-error"

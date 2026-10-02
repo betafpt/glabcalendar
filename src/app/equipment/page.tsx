@@ -15,6 +15,7 @@ type EquipmentSummary = {
   name: string;
   category: string | null;
   status: string;
+  imageDataUrl: string | null;
 };
 
 async function load(): Promise<{ items: EquipmentSummary[]; error?: string }> {
@@ -138,7 +139,11 @@ export default async function EquipmentPage({
               {group.slice(0, 3).map((item) => (
                 <Link key={item.id} href={`/equipment/${item.id}`} className="group min-w-0 rounded-r16 bg-white/35 p-1.5 text-center transition duration-base active:scale-[.98] sm:p-2">
                   <div className="relative grid aspect-[1.04] place-items-center overflow-hidden rounded-r10 bg-white/60">
-                    <div className="h-[44%] w-[64%] rounded-[8px] border-[3px] border-ink/70 bg-ink/10 shadow-[0_8px_0_rgba(9,9,9,.08)]" />
+                    {item.imageDataUrl ? (
+                      <img src={item.imageDataUrl} alt={item.name} className="absolute inset-0 h-full w-full object-cover" />
+                    ) : (
+                      <div className="h-[44%] w-[64%] rounded-[8px] border-[3px] border-ink/70 bg-ink/10 shadow-[0_8px_0_rgba(9,9,9,.08)]" />
+                    )}
                     <span className="absolute bottom-1 right-1 text-[7px] font-black uppercase tracking-wide text-ink/45">GL</span>
                   </div>
                   <span className={`mt-1.5 inline-flex rounded-pill px-2 py-0.5 text-[8px] font-black uppercase ${statusTone(item.status)}`}>{item.status}</span>
