@@ -29,7 +29,7 @@ import {
   More,
 } from "@/components/ui/iconsax";
 import type { Shoot } from "@/server/db/schema";
-import { requireWorkspaceContext } from "@/server/workspace-context";
+import { requireWorkspaceContext, isRedirectError } from "@/server/workspace-context";
 
 export const dynamic = "force-dynamic";
 
@@ -142,35 +142,47 @@ function safeDate(value?: string) {
   return Number.isNaN(date.getTime()) ? new Date() : date;
 }
 
-function dateKey(date: Date, timeZone: string) {
+function toDate(val: unknown): Date {
+  if (val instanceof Date) return isNaN(val.getTime()) ? new Date() : val;
+  if (typeof val === "string" || typeof val === "number") {
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? new Date() : d;
+  }
+  return new Date();
+}
+
+function dateKey(date: Date | string, timeZone: string) {
+  const d = toDate(date);
   return new Intl.DateTimeFormat("en-CA", {
     timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(date);
+  }).format(d);
 }
 
-function formatTime(date: Date, timeZone: string) {
+function formatTime(date: Date | string, timeZone: string) {
+  const d = toDate(date);
   return new Intl.DateTimeFormat("en", {
     timeZone,
     hour: "numeric",
     minute: "2-digit",
-  }).format(date);
+  }).format(d);
 }
 
-function monthLabels(anchor: Date, timeZone: string) {
+function monthLabels(anchor: Date | string, timeZone: string) {
+  const d = toDate(anchor);
   const en = new Intl.DateTimeFormat("en", {
     timeZone,
     month: "short",
     year: "numeric",
-  }).format(anchor).toUpperCase();
+  }).format(d).toUpperCase();
 
   const vi = new Intl.DateTimeFormat("vi", {
     timeZone,
     month: "short",
     year: "numeric",
-  }).format(anchor).toUpperCase();
+  }).format(d).toUpperCase();
 
   return { vi, en };
 }
@@ -310,8 +322,17 @@ async function loadData(
       getCachedCalendarFilterOptions(organization.id),
     ]);
     const shoots = Array.from(
-      new Map([...workspaceShoots, ...assignedShoots].map((shoot) => [shoot.id, shoot])).values()
-    ).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+      new Map([...workspaceShoots, ...assignedShoots].map((shoot) => {
+        const s = {
+          ...shoot,
+          startsAt: toDate(shoot.startsAt),
+          endsAt: toDate(shoot.endsAt),
+          createdAt: toDate(shoot.createdAt),
+          updatedAt: toDate(shoot.updatedAt),
+        };
+        return [s.id, s];
+      })).values()
+    ).sort((a, b) => toDate(a.startsAt).getTime() - toDate(b.startsAt).getTime());
 
     const shootCrewMap: Record<string, string[]> = {};
     if (shoots.length > 0) {
@@ -350,6 +371,7 @@ async function loadData(
 
     return { shoots: formattedShoots, ...filterOptions, timezone: organization.timezone, shootCrewMap };
   } catch (error) {
+    if (isRedirectError(error)) throw error;
     return {
       shoots: [],
       projects: [],
@@ -481,13 +503,13 @@ export default async function CalendarPage({
 
   // Upcoming shoots this month
   const futureShoots = [...data.shoots]
-    .filter((shoot) => shoot.startsAt >= now)
-    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+    .filter((shoot) => toDate(shoot.startsAt) >= now)
+    .sort((a, b) => toDate(a.startsAt).getTime() - toDate(b.startsAt).getTime());
   const upcoming = (
     futureShoots.length > 0
       ? futureShoots
       : [...data.shoots].sort(
-          (a, b) => a.startsAt.getTime() - b.startsAt.getTime(),
+          (a, b) => toDate(a.startsAt).getTime() - toDate(b.startsAt).getTime(),
         )
   ).slice(0, 3);
 
@@ -535,8 +557,8 @@ export default async function CalendarPage({
                 id: s.id,
                 title: s.title,
                 status: s.status,
-                startsAt: s.startsAt.toISOString(),
-                endsAt: s.endsAt.toISOString(),
+                startsAt: toDate(s.startsAt).toISOString(),
+                endsAt: toDate(s.endsAt).toISOString(),
                 locationName: s.locationName,
                 locationAddress: s.locationAddress,
                 projectId: s.projectId,

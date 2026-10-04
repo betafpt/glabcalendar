@@ -8,7 +8,7 @@ import { StatusText } from "@/components/ui/status-text";
 import { Calendar, Add, VideoSquare, TickCircle, Clock, ArrowRight2, Folder2, User } from "@/components/ui/iconsax";
 import { errorMessage } from "@/lib/error-message";
 import type { Project } from "@/server/db/schema";
-import { requireWorkspaceContext } from "@/server/workspace-context";
+import { requireWorkspaceContext, isRedirectError } from "@/server/workspace-context";
 import { ProjectCreateForm } from "./project-create-form";
 import { WorkspaceMenu } from "@/components/production/workspace-menu";
 import { ModalPopover } from "@/components/ui/modal-popover";
@@ -40,6 +40,7 @@ async function loadProjects(): Promise<{
 
     return { projects, shootStatuses };
   } catch (error) {
+    if (isRedirectError(error)) throw error;
     return {
       projects: [],
       shootStatuses: [],

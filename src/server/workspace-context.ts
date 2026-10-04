@@ -20,6 +20,19 @@ export type AuthenticatedWorkspaceContext = {
 export const ACTIVE_WORKSPACE_COOKIE = "glab_active_workspace_id";
 
 /**
+ * Returns true if an error is a Next.js redirect exception that must bubble up.
+ */
+export function isRedirectError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "digest" in error &&
+    typeof (error as { digest: unknown }).digest === "string" &&
+    (error as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+  );
+}
+
+/**
  * Resolves the authenticated user, active workspace, and verified membership.
  * Never falls back to a global single organization for normal user requests.
  */

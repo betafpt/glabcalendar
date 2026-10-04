@@ -9,7 +9,7 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { Clock, Location, ArrowRight2, VideoPlay, Calendar } from "@/components/ui/iconsax";
 import { getServerConfig } from "@/lib/config";
 import { errorMessage } from "@/lib/error-message";
-import { requireWorkspaceContext } from "@/server/workspace-context";
+import { requireWorkspaceContext, isRedirectError } from "@/server/workspace-context";
 import { ShootCreateForm } from "./shoot-create-form";
 import { WorkspaceMenu } from "@/components/production/workspace-menu";
 
@@ -61,6 +61,7 @@ async function loadData(includeTestData = false): Promise<{ shoots: ShootSummary
     ]);
     return { shoots, projects };
   } catch (error) {
+    if (isRedirectError(error)) throw error;
     return { shoots: [], projects: [], error: errorMessage(error, "Unable to load shoots right now.") };
   }
 }

@@ -40,9 +40,11 @@ export interface GoogleCalendarViewProps {
   errorMessage?: string | null;
 }
 
-function formatLastSync(value?: Date | null) {
+function formatLastSync(value?: Date | string | null) {
   if (!value) return "Chưa đồng bộ";
-  return new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  const d = value instanceof Date ? value : new Date(value);
+  if (isNaN(d.getTime())) return "Chưa đồng bộ";
+  return new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium", timeStyle: "short" }).format(d);
 }
 
 export function GoogleCalendarView({ connection, errorMessage }: GoogleCalendarViewProps) {

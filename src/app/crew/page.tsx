@@ -7,7 +7,7 @@ import { LocalizedText } from "@/components/ui/localized-text";
 import { Calendar, Add, ArrowRight2, Profile2User } from "@/components/ui/iconsax";
 import { calendarRange } from "@/lib/calendar-range";
 import { errorMessage } from "@/lib/error-message";
-import { requireWorkspaceContext } from "@/server/workspace-context";
+import { requireWorkspaceContext, isRedirectError } from "@/server/workspace-context";
 import { CrewForm } from "./crew-form";
 import { WorkspaceMenu } from "@/components/production/workspace-menu";
 import { ModalPopover } from "@/components/ui/modal-popover";
@@ -65,11 +65,13 @@ async function load(): Promise<{
       const shoot = shootById.get(assignment.shootId);
       if (!shoot || todayScheduleMap.has(crewMember.id)) continue;
 
+      const d = shoot.startsAt instanceof Date ? shoot.startsAt : new Date(shoot.startsAt);
+      const validDate = isNaN(d.getTime()) ? new Date() : d;
       const timeStr = new Intl.DateTimeFormat("en", {
         timeZone: organization.timezone,
         hour: "numeric",
         minute: "2-digit",
-      }).format(new Date(shoot.startsAt));
+      }).format(validDate);
 
       todayScheduleMap.set(crewMember.id, {
         hasShootToday: true,
@@ -80,6 +82,7 @@ async function load(): Promise<{
 
     return { crew, todayScheduleMap };
   } catch (error) {
+    if (isRedirectError(error)) throw error;
     return {
       crew: [],
       todayScheduleMap: new Map(),

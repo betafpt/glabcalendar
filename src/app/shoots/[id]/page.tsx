@@ -18,6 +18,7 @@ import type { AccountAssigneeRow } from "./crew-assignment-section";
 import { ShootSummaryHero } from "./shoot-summary-hero";
 import { ShootGoogleSyncStatus } from "./shoot-google-sync-status";
 import { createGoogleCalendarRepository } from "@/server/db/google-calendar";
+import { isRedirectError } from "@/server/workspace-context";
 
 export const dynamic = "force-dynamic";
 
@@ -124,6 +125,7 @@ async function loadData(id: string): Promise<{
       googleSyncMapped: Boolean(googleSync?.externalEventId),
     };
   } catch (error) {
+    if (isRedirectError(error)) throw error;
     return {
       shoot: null,
       projects: [],

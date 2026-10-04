@@ -5,7 +5,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { LocalizedText } from "@/components/ui/localized-text";
 import { Calendar, Add, ArrowRight2, Camera } from "@/components/ui/iconsax";
 import { errorMessage } from "@/lib/error-message";
-import { requireWorkspaceContext } from "@/server/workspace-context";
+import { requireWorkspaceContext, isRedirectError } from "@/server/workspace-context";
 import { EquipmentForm } from "./equipment-form";
 import { WorkspaceMenu } from "@/components/production/workspace-menu";
 import { ModalPopover } from "@/components/ui/modal-popover";
@@ -30,6 +30,7 @@ async function load(): Promise<{ items: EquipmentSummary[]; error?: string }> {
     const { organization } = await requireWorkspaceContext();
     return { items: await createEquipmentRepository(db).listSummaries(organization.id) };
   } catch (error) {
+    if (isRedirectError(error)) throw error;
     return { items: [], error: errorMessage(error, "Unable to load equipment.") };
   }
 }

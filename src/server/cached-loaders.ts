@@ -9,11 +9,31 @@ import { createProjectRepository } from "@/server/db/projects";
 import { getCalendarFilterOptions } from "@/server/calendar-filter-options";
 import { CACHE_TAGS } from "./cache-keys";
 
+function toDate(val: unknown): Date {
+  if (val instanceof Date) return isNaN(val.getTime()) ? new Date() : val;
+  if (typeof val === "string" || typeof val === "number") {
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? new Date() : d;
+  }
+  return new Date();
+}
+
+function hydrateShoot<T extends Record<string, any>>(s: T): T {
+  if (!s) return s;
+  return {
+    ...s,
+    startsAt: toDate(s.startsAt),
+    endsAt: toDate(s.endsAt),
+    createdAt: s.createdAt ? toDate(s.createdAt) : s.createdAt,
+    updatedAt: s.updatedAt ? toDate(s.updatedAt) : s.updatedAt,
+  };
+}
+
 /**
  * Cached Dashboard Loader
  * Phục hồi dữ liệu tức thì cho Dashboard trong 10-30ms khi người dùng chuyển trang.
  */
-export const getCachedDashboardToday = (organizationId: string, timezone: string) => {
+export const getCachedDashboardToday = async (organizationId: string, timezone: string) => {
   const cachedFn = unstable_cache(
     async () => {
       const repo = createDashboardRepository(db);
@@ -25,14 +45,26 @@ export const getCachedDashboardToday = (organizationId: string, timezone: string
       tags: [CACHE_TAGS.dashboard(organizationId)],
     }
   );
-  return cachedFn();
+  const summary = await cachedFn();
+  if (!summary) return summary;
+  return {
+    ...summary,
+    anchor: toDate(summary.anchor),
+    range: summary.range
+      ? {
+          start: toDate(summary.range.start),
+          end: toDate(summary.range.end),
+        }
+      : summary.range,
+    shoots: (summary.shoots || []).map(hydrateShoot),
+  };
 };
 
 /**
  * Cached Calendar Shoots Loader
  * Tối ưu thời gian tải lịch trình cho Calendar (Month / Week / Day)
  */
-export const getCachedCalendarShoots = (
+export const getCachedCalendarShoots = async (
   organizationId: string,
   startIso: string,
   endIso: string,
@@ -55,7 +87,8 @@ export const getCachedCalendarShoots = (
       tags: [CACHE_TAGS.calendar(organizationId)],
     }
   );
-  return cachedFn();
+  const list = await cachedFn();
+  return (list || []).map(hydrateShoot);
 };
 
 /**
@@ -134,7 +167,7 @@ export const getCachedProjectsList = (organizationId: string) => {
  * Cached Shoot Resources & Readiness Loader
  * Tối ưu hóa thời gian tải Shoot Detail từ >700ms xuống <30ms khi chuyển trang.
  */
-export const getCachedShootDetailData = (organizationId: string, shootId: string) => {
+export const getCachedShootDetailData = async (organizationId: string, shootId: string) => {
   const cachedFn = unstable_cache(
     async () => {
       const [{ createShootRepository }, { createCrewAssignmentRepository }, { createEquipmentBookingRepository }, { createChecklistRepository }, { createProjectRepository }, { createShootAssigneesRepository }, { calculateShootReadiness }] = await Promise.all([
@@ -231,5 +264,15 @@ export const getCachedShootDetailData = (organizationId: string, shootId: string
       tags: [CACHE_TAGS.shootDetail(organizationId, shootId)],
     }
   );
-  return cachedFn();
+  const data = await cachedFn();
+  if (!data || !data.shoot) return data;
+  return {
+    ...data,
+    shoot: hydrateShoot(data.shoot),
+    checklistItems: (data.checklistItems || []).map((c: any) => ({
+      ...c,
+      createdAt: c.createdAt ? toDate(c.createdAt) : c.createdAt,
+      updatedAt: c.updatedAt ? toDate(c.updatedAt) : c.updatedAt,
+    })),
+  };
 };

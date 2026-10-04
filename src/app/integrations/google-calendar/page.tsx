@@ -1,6 +1,6 @@
 import { db } from "@/server/db";
 import { createGoogleCalendarRepository } from "@/server/db/google-calendar";
-import { requireWorkspaceContext } from "@/server/workspace-context";
+import { isRedirectError, requireWorkspaceContext } from "@/server/workspace-context";
 import { GoogleCalendarView, type GoogleCalendarViewProps } from "./google-calendar-view";
 
 export const dynamic = "force-dynamic";
@@ -29,13 +29,14 @@ export default async function GoogleCalendarPage({ searchParams }: PageProps) {
         status: normalizeConnectionStatus(conn.status),
         accountEmail: conn.accountEmail,
         accountName: conn.accountName,
-        lastSyncedAt: conn.lastSyncedAt,
+        lastSyncedAt: conn.lastSyncedAt ? new Date(conn.lastSyncedAt) : null,
         lastSyncStatus: conn.lastSyncStatus,
         lastSyncMessage: conn.lastSyncMessage,
         syncEnabled: conn.syncEnabled,
       };
     }
   } catch (err) {
+    if (isRedirectError(err)) throw err;
     console.error("Failed to load Google Calendar connection:", err);
   }
 

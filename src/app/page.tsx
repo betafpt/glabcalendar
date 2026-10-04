@@ -8,7 +8,7 @@ import { Calendar, Category, Add, Location, Sun1, ArrowRight2 } from "@/componen
 import { DEFAULT_APP_TIMEZONE, getServerConfig } from "@/lib/config";
 import { errorMessage } from "@/lib/error-message";
 import type { TodayDashboardSummary } from "@/server/db/dashboard";
-import { requireWorkspaceContext } from "@/server/workspace-context";
+import { requireWorkspaceContext, isRedirectError } from "@/server/workspace-context";
 import { WorkspaceMenu } from "@/components/production/workspace-menu";
 import { OperationsStatus } from "@/components/dashboard/operations-status";
 
@@ -32,6 +32,7 @@ async function loadToday(): Promise<TodayPageData> {
     );
     return { summary, timezone: organization.timezone };
   } catch (error) {
+    if (isRedirectError(error)) throw error;
     const fallbackSummary: TodayDashboardSummary = {
       timezone,
       anchor: new Date(),
