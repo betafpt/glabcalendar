@@ -3,9 +3,11 @@
 import { useFormState, useFormStatus } from "react-dom";
 import { fieldClass, labelClass } from "@/components/ui/form-styles";
 import { LocalizedText } from "@/components/ui/localized-text";
-import { ArrowDown2 } from "@/components/ui/iconsax";
+import { ArrowDown2, Setting2 } from "@/components/ui/iconsax";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useLanguage } from "@/components/language-provider";
 import { localizeErrorMessage } from "@/i18n/errors";
+import { MapTilerAddressAutocomplete } from "@/components/ui/maptiler-address-autocomplete";
 import { createShootAction, type ShootActionState } from "./actions";
 
 const initialState: ShootActionState = { ok: false };
@@ -62,17 +64,6 @@ export function ShootCreateForm({
       </FieldCard>
 
       <div className="grid gap-2.5 sm:grid-cols-2">
-        <FieldCard tone="bg-lilac">
-          <label htmlFor="projectId" className={labelClass}><LocalizedText vi="DỰ ÁN" en="PROJECT" /></label>
-          <StyledSelect
-            id="projectId"
-            name="projectId"
-            defaultValue={defaultProjectId || ""}
-          >
-            <option value=""><LocalizedText vi="Không thuộc dự án" en="No project" /></option>
-            {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
-          </StyledSelect>
-        </FieldCard>
         <FieldCard tone="bg-mint">
           <label htmlFor="status" className={labelClass}><LocalizedText vi="TRẠNG THÁI" en="STATUS" /></label>
           <StyledSelect id="status" name="status" defaultValue="planned">
@@ -82,6 +73,16 @@ export function ShootCreateForm({
             <option value="completed"><LocalizedText vi="Hoàn thành" en="Completed" /></option>
             <option value="cancelled"><LocalizedText vi="Đã hủy" en="Cancelled" /></option>
           </StyledSelect>
+        </FieldCard>
+        <FieldCard tone="bg-sky">
+          <label htmlFor="locationName" className={labelClass}><LocalizedText vi="ĐỊA ĐIỂM" en="LOCATION" /></label>
+          <MapTilerAddressAutocomplete
+            id="locationName"
+            name="locationName"
+            required
+            placeholder={locale === "vi" ? "Nhập tên địa điểm hoặc địa chỉ..." : "Enter a place or address..."}
+            className="border-0 bg-surface/85"
+          />
         </FieldCard>
       </div>
 
@@ -97,26 +98,41 @@ export function ShootCreateForm({
         </FieldCard>
       </div>
 
-      <FieldCard tone="bg-yellow">
-        <label htmlFor="callTime" className={labelClass}><LocalizedText vi="GIỜ TẬP TRUNG" en="CALL TIME" /></label>
-        <input id="callTime" name="callTime" type="datetime-local" className={`${fieldClass} border-0 bg-surface/85`} />
-      </FieldCard>
+      <Accordion type="single" defaultValue="" className="space-y-0">
+        <AccordionItem value="advanced" className="overflow-hidden border border-stroke/80 bg-surface/75 shadow-none">
+          <AccordionTrigger className="px-4 py-3.5 hover:bg-white/70">
+            <div className="flex items-center gap-3">
+              <span className="grid size-9 place-items-center rounded-r14 bg-lilac text-ink">
+                <Setting2 size={17} variant="Linear" />
+              </span>
+              <div>
+                <p className="text-xs font-black uppercase tracking-[.12em] text-ink">
+                  <LocalizedText vi="Thiết lập thêm" en="More settings" />
+                </p>
+                <p className="mt-0.5 text-[11px] font-semibold text-secondary">
+                  <LocalizedText vi="Dự án, ghi chú, đồng bộ và dữ liệu test" en="Project, notes, sync and test data" />
+                </p>
+              </div>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="px-3 pb-3 sm:px-4 sm:pb-4">
+            <div className="grid gap-2.5 border-t border-stroke/70 pt-3">
+              <FieldCard tone="bg-lilac/65">
+                <label htmlFor="projectId" className={labelClass}><LocalizedText vi="DỰ ÁN" en="PROJECT" /></label>
+                <StyledSelect id="projectId" name="projectId" defaultValue={defaultProjectId || ""}>
+                  <option value=""><LocalizedText vi="Không thuộc dự án" en="No project" /></option>
+                  {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+                </StyledSelect>
+              </FieldCard>
 
-      <div className="grid gap-2.5 sm:grid-cols-2">
-        <FieldCard tone="bg-sky">
-          <label htmlFor="locationName" className={labelClass}><LocalizedText vi="ĐỊA ĐIỂM" en="LOCATION" /></label>
-          <input id="locationName" name="locationName" className={`${fieldClass} border-0 bg-surface/85`} placeholder={locale === "vi" ? "Ví dụ: Studio A" : "Studio A"} />
-        </FieldCard>
-        <FieldCard tone="bg-sky">
-          <label htmlFor="locationAddress" className={labelClass}><LocalizedText vi="ĐỊA CHỈ" en="ADDRESS" /></label>
-          <input id="locationAddress" name="locationAddress" placeholder="Google Maps: số nhà, đường, địa điểm..." className={`${fieldClass} border-0 bg-surface/85`} />
-        </FieldCard>
-      </div>
-
-      <FieldCard>
-        <label htmlFor="notes" className={labelClass}><LocalizedText vi="GHI CHÚ" en="NOTES" /></label>
-        <textarea id="notes" name="notes" rows={3} className={fieldClass} placeholder={locale === "vi" ? "Ghi chú ekip, hướng dẫn ra vào, chi tiết sản xuất..." : "Crew notes, access instructions, production details..."} />
-      </FieldCard>
+              <FieldCard>
+                <label htmlFor="notes" className={labelClass}><LocalizedText vi="GHI CHÚ" en="NOTES" /></label>
+                <textarea id="notes" name="notes" rows={3} className={fieldClass} placeholder={locale === "vi" ? "Ghi chú ekip, hướng dẫn ra vào, chi tiết sản xuất..." : "Crew notes, access instructions, production details..."} />
+              </FieldCard>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
 
       {feedback ? <p className={`rounded-r16 px-4 py-3 text-sm font-bold ${state.ok ? "bg-mint text-ink" : "bg-coral text-error"}`}>{feedback}</p> : null}
       <SubmitButton />

@@ -23,6 +23,21 @@ const config: Config = {
         warning: "var(--color-warning)",
         error: "var(--color-error)",
         stroke: "var(--color-stroke)",
+        glab: {
+          bg: "var(--glab-bg)",
+          surface: "var(--glab-surface)",
+          ink: "var(--glab-ink)",
+          secondary: "var(--glab-secondary)",
+          pink: "var(--glab-pink)",
+          line: "var(--glab-line)",
+          status: {
+            confirmed: { bg: "var(--glab-status-confirmed-bg)", ink: "var(--glab-status-confirmed-ink)" },
+            planned: { bg: "var(--glab-status-planned-bg)", ink: "var(--glab-status-planned-ink)" },
+            in_progress: { bg: "var(--glab-status-in-progress-bg)", ink: "var(--glab-status-in-progress-ink)" },
+            completed: { bg: "var(--glab-status-completed-bg)", ink: "var(--glab-status-completed-ink)" },
+            cancelled: { bg: "var(--glab-status-cancelled-bg)", ink: "var(--glab-status-cancelled-ink)" },
+          },
+        },
       },
       borderRadius: {
         r10: "var(--radius-10)",

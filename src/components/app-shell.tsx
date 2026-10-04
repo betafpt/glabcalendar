@@ -19,11 +19,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <LinkBrand />
           <div className="mt-8"><BottomNavigation /></div>
           <div className="mt-5 space-y-1 border-t border-stroke pt-5 text-sm font-bold text-secondary">
-            <Link className="block rounded-r16 px-3 py-2 hover:bg-surface hover:text-ink" href="/shoots"><LocalizedText vi="Buổi quay" en="Shoots" /></Link>
-            <Link className="block rounded-r16 px-3 py-2 hover:bg-surface hover:text-ink" href="/clients"><LocalizedText vi="Khách hàng" en="Clients" /></Link>
-            <Link className="block rounded-r16 px-3 py-2 hover:bg-surface hover:text-ink" href="/integrations/google-calendar"><LocalizedText vi="Đồng bộ lịch" en="Calendar Sync" /></Link>
-            <Link className="block rounded-r16 px-3 py-2 hover:bg-surface hover:text-ink" href="/ai"><LocalizedText vi="Trợ lý AI" en="AI Assistant" /></Link>
-            <Link className="block rounded-r16 px-3 py-2 hover:bg-surface hover:text-ink" href="/settings"><LocalizedText vi="Cài đặt" en="Settings" /></Link>
+            <Link prefetch={true} className="block rounded-r16 px-3 py-2 hover:bg-surface hover:text-ink" href="/shoots"><LocalizedText vi="Buổi quay" en="Shoots" /></Link>
+            <Link prefetch={true} className="block rounded-r16 px-3 py-2 hover:bg-surface hover:text-ink" href="/clients"><LocalizedText vi="Khách hàng" en="Clients" /></Link>
+            <Link prefetch={true} className="block rounded-r16 px-3 py-2 hover:bg-surface hover:text-ink" href="/integrations/google-calendar"><LocalizedText vi="Đồng bộ lịch" en="Calendar Sync" /></Link>
+            <Link prefetch={true} className="block rounded-r16 px-3 py-2 hover:bg-surface hover:text-ink" href="/settings"><LocalizedText vi="Cài đặt" en="Settings" /></Link>
           </div>
           <div className="mt-auto space-y-3">
             <Link

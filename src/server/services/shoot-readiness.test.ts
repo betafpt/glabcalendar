@@ -22,6 +22,10 @@ function createMockShoot(overrides?: Partial<Shoot>): Shoot {
     notes: null,
     createdAt: new Date("2026-09-01T00:00:00Z"),
     updatedAt: new Date("2026-09-01T00:00:00Z"),
+    syncPolicy: "local_only",
+    isTestData: false,
+    sourceCalendarId: null,
+    externalEventId: null,
     ...overrides,
   };
 }
@@ -61,7 +65,7 @@ describe("Shoot readiness aggregation (M4-T05)", () => {
       expect(result.conflictCount).toBe(0);
       expect(result.hasConflicts).toBe(false);
       expect(result.status).toBe("ready");
-      expect(result.isReadyForCallTime).toBe(true);
+      expect(result.isReady).toBe(true);
       expect(result.isCancelled).toBe(false);
     });
 
@@ -86,7 +90,7 @@ describe("Shoot readiness aggregation (M4-T05)", () => {
       expect(result.checklistTotal).toBe(3);
       expect(result.checklistCompleted).toBe(1);
       expect(result.status).toBe("in_progress");
-      expect(result.isReadyForCallTime).toBe(false);
+      expect(result.isReady).toBe(false);
       expect(result.hasConflicts).toBe(false);
     });
 
@@ -105,7 +109,7 @@ describe("Shoot readiness aggregation (M4-T05)", () => {
       expect(result.checklistTotal).toBe(0);
       expect(result.checklistCompleted).toBe(0);
       expect(result.status).toBe("needs_setup");
-      expect(result.isReadyForCallTime).toBe(false);
+      expect(result.isReady).toBe(false);
       expect(result.hasConflicts).toBe(false);
     });
 
@@ -127,7 +131,7 @@ describe("Shoot readiness aggregation (M4-T05)", () => {
       expect(result.conflictCount).toBe(0);
       expect(result.hasConflicts).toBe(false);
       expect(result.status).toBe("needs_setup");
-      expect(result.isReadyForCallTime).toBe(false);
+      expect(result.isReady).toBe(false);
       expect(result.isCancelled).toBe(false);
     });
 
@@ -163,7 +167,7 @@ describe("Shoot readiness aggregation (M4-T05)", () => {
       expect(result.crewConflicts[0].crewMemberName).toBe("Alice DOP");
       expect(result.crewConflicts[0].conflicts).toEqual([conflict]);
       expect(result.status).toBe("blocked");
-      expect(result.isReadyForCallTime).toBe(false);
+      expect(result.isReady).toBe(false);
     });
 
     it("marks readiness as blocked when equipment conflict exists", () => {
@@ -192,7 +196,7 @@ describe("Shoot readiness aggregation (M4-T05)", () => {
       expect(result.equipmentConflicts[0].equipmentItemId).toBe("e1");
       expect(result.equipmentConflicts[0].equipmentItemName).toBe("FX3 Camera");
       expect(result.status).toBe("blocked");
-      expect(result.isReadyForCallTime).toBe(false);
+      expect(result.isReady).toBe(false);
     });
 
     it("aggregates both crew and equipment conflicts accurately", () => {
@@ -233,7 +237,7 @@ describe("Shoot readiness aggregation (M4-T05)", () => {
       expect(result.conflictCount).toBe(3);
       expect(result.hasConflicts).toBe(true);
       expect(result.status).toBe("blocked");
-      expect(result.isReadyForCallTime).toBe(false);
+      expect(result.isReady).toBe(false);
     });
 
     it("safely handles cancelled shoots and neutralizes conflicts while preserving resource counts", () => {
@@ -276,7 +280,7 @@ describe("Shoot readiness aggregation (M4-T05)", () => {
       expect(result.hasConflicts).toBe(false);
       expect(result.crewConflicts).toEqual([]);
       expect(result.equipmentConflicts).toEqual([]);
-      expect(result.isReadyForCallTime).toBe(false);
+      expect(result.isReady).toBe(false);
     });
 
     it("marks readiness as blocked when shoot has 0 checklist items but has conflicts", () => {
@@ -301,7 +305,7 @@ describe("Shoot readiness aggregation (M4-T05)", () => {
       expect(result.hasConflicts).toBe(true);
       expect(result.conflictCount).toBe(1);
       expect(result.readinessPercent).toBe(0);
-      expect(result.isReadyForCallTime).toBe(false);
+      expect(result.isReady).toBe(false);
     });
 
     it("safely handles missing optional fields like crew/equipment names or undefined conflicts", () => {
@@ -318,7 +322,7 @@ describe("Shoot readiness aggregation (M4-T05)", () => {
       expect(result.hasConflicts).toBe(false);
       expect(result.crewCount).toBe(1);
       expect(result.equipmentCount).toBe(1);
-      expect(result.isReadyForCallTime).toBe(true);
+      expect(result.isReady).toBe(true);
     });
   });
 });

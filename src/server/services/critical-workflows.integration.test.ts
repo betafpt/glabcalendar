@@ -38,6 +38,10 @@ const shoot: Shoot = {
   notes: null,
   createdAt: new Date("2026-09-20T00:00:00Z"),
   updatedAt: new Date("2026-09-20T00:00:00Z"),
+  syncPolicy: "local_only",
+  isTestData: false,
+  sourceCalendarId: null,
+  externalEventId: null,
 };
 
 describe("critical scheduling workflows", () => {
@@ -279,6 +283,10 @@ describe("critical scheduling workflows", () => {
           notes: input.notes ?? null,
           createdAt: new Date("2026-10-01T00:00:00Z"),
           updatedAt: new Date("2026-10-01T00:00:00Z"),
+          syncPolicy: input.syncPolicy ?? "local_only",
+          isTestData: input.isTestData ?? false,
+          sourceCalendarId: input.sourceCalendarId ?? null,
+          externalEventId: input.externalEventId ?? null,
         };
         shootStore.set(shootItem.id, shootItem);
         return shootItem;
@@ -437,6 +445,10 @@ describe("critical scheduling workflows", () => {
       notes: null,
       createdAt: new Date("2026-09-20T00:00:00Z"),
       updatedAt: new Date("2026-09-20T00:00:00Z"),
+      syncPolicy: "local_only",
+      isTestData: false,
+      sourceCalendarId: null,
+      externalEventId: null,
     };
 
     const shoot2: Shoot = {
@@ -453,6 +465,10 @@ describe("critical scheduling workflows", () => {
       notes: null,
       createdAt: new Date("2026-09-20T00:00:00Z"),
       updatedAt: new Date("2026-09-20T00:00:00Z"),
+      syncPolicy: "local_only",
+      isTestData: false,
+      sourceCalendarId: null,
+      externalEventId: null,
     };
 
     const shoot3: Shoot = {
@@ -469,6 +485,10 @@ describe("critical scheduling workflows", () => {
       notes: null,
       createdAt: new Date("2026-09-20T00:00:00Z"),
       updatedAt: new Date("2026-09-20T00:00:00Z"),
+      syncPolicy: "local_only",
+      isTestData: false,
+      sourceCalendarId: null,
+      externalEventId: null,
     };
 
     const shootsMap = new Map<string, Shoot>([
@@ -629,6 +649,10 @@ describe("critical scheduling workflows", () => {
       notes: null,
       createdAt: new Date("2026-09-20T00:00:00Z"),
       updatedAt: new Date("2026-09-20T00:00:00Z"),
+      syncPolicy: "local_only",
+      isTestData: false,
+      sourceCalendarId: null,
+      externalEventId: null,
     };
 
     const shootB: Shoot = {
@@ -645,6 +669,10 @@ describe("critical scheduling workflows", () => {
       notes: null,
       createdAt: new Date("2026-09-20T00:00:00Z"),
       updatedAt: new Date("2026-09-20T00:00:00Z"),
+      syncPolicy: "local_only",
+      isTestData: false,
+      sourceCalendarId: null,
+      externalEventId: null,
     };
 
     const shootC: Shoot = {
@@ -661,6 +689,10 @@ describe("critical scheduling workflows", () => {
       notes: null,
       createdAt: new Date("2026-09-20T00:00:00Z"),
       updatedAt: new Date("2026-09-20T00:00:00Z"),
+      syncPolicy: "local_only",
+      isTestData: false,
+      sourceCalendarId: null,
+      externalEventId: null,
     };
 
     const shootsMap = new Map<string, Shoot>([
@@ -827,6 +859,10 @@ describe("critical scheduling workflows", () => {
       notes: null,
       createdAt: new Date("2026-09-01T00:00:00Z"),
       updatedAt: new Date("2026-09-01T00:00:00Z"),
+      syncPolicy: "local_only",
+      isTestData: false,
+      sourceCalendarId: null,
+      externalEventId: null,
     };
 
     const shoot2: Shoot = {
@@ -843,6 +879,10 @@ describe("critical scheduling workflows", () => {
       notes: null,
       createdAt: new Date("2026-09-01T00:00:00Z"),
       updatedAt: new Date("2026-09-01T00:00:00Z"),
+      syncPolicy: "local_only",
+      isTestData: false,
+      sourceCalendarId: null,
+      externalEventId: null,
     };
 
     const shoot3: Shoot = {
@@ -859,6 +899,10 @@ describe("critical scheduling workflows", () => {
       notes: null,
       createdAt: new Date("2026-09-01T00:00:00Z"),
       updatedAt: new Date("2026-09-01T00:00:00Z"),
+      syncPolicy: "local_only",
+      isTestData: false,
+      sourceCalendarId: null,
+      externalEventId: null,
     };
 
     const shoot4: Shoot = {
@@ -875,6 +919,10 @@ describe("critical scheduling workflows", () => {
       notes: null,
       createdAt: new Date("2026-09-01T00:00:00Z"),
       updatedAt: new Date("2026-09-01T00:00:00Z"),
+      syncPolicy: "local_only",
+      isTestData: false,
+      sourceCalendarId: null,
+      externalEventId: null,
     };
 
     const shootsList: Shoot[] = [shoot1, shoot2, shoot3, shoot4];

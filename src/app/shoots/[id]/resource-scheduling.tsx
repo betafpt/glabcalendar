@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useFormState, useFormStatus } from "react-dom";
 import type { EquipmentBooking, ShootCrewAssignment } from "@/server/db/schema";
 import type { ShootCrewOption, ShootEquipmentOption } from "@/server/shoot-detail-options";
@@ -132,6 +133,28 @@ export function ResourceScheduling({
         <h2 className="mt-1 font-display text-[clamp(1.8rem,5vw,2.5rem)] font-black uppercase leading-[.88] tracking-[-.04em]">
           <LocalizedText vi="Đặt thiết bị" en="Book gear" /><span className="text-pink">*</span>
         </h2>
+        {equipment.length === 0 ? (
+          <div className="mt-4 rounded-r22 border border-dashed border-stroke bg-surface/90 p-5 text-center shadow-soft">
+            <p className="text-xs font-bold text-secondary">
+              <LocalizedText
+                vi="Kho thiết bị hiện đang trống hoặc chưa có thiết bị nào."
+                en="Equipment inventory is currently empty."
+              />
+            </p>
+            <p className="mt-1 text-[11px] font-medium text-secondary/80">
+              <LocalizedText
+                vi="Vui lòng thêm thiết bị vào kho trước khi tiến hành đặt cho buổi quay."
+                en="Please add gear to your equipment library before booking for a shoot."
+              />
+            </p>
+            <Link
+              href="/equipment"
+              className="mt-3 inline-flex min-h-10 items-center justify-center rounded-pill bg-ink px-4 text-xs font-black uppercase tracking-wider text-white shadow-soft transition hover:bg-pink active:scale-press"
+            >
+              + <LocalizedText vi="Đến kho thiết bị" en="Go to Equipment Library" />
+            </Link>
+          </div>
+        ) : (
         <form action={equipmentAction} className="mt-4 space-y-3 rounded-r22 bg-surface/90 p-4 shadow-soft">
           <div>
             <label htmlFor="equipment-item" className={labelClass}>
@@ -168,6 +191,7 @@ export function ResourceScheduling({
           ) : null}
           <ConflictList conflicts={equipmentState.conflicts} />
         </form>
+        )}
         <div className="mt-4 space-y-2">
           {equipmentBookings.length ? (
             equipmentBookings.map(({ booking, equipmentItem }) => (

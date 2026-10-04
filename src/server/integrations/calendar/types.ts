@@ -52,6 +52,12 @@ export interface CalendarInfo {
   summary: string;
   primary?: boolean;
   timeZone?: string;
+  description?: string;
+  summaryOverride?: string;
+  accessRole?: "freeBusyReader" | "reader" | "writer" | "owner";
+  selected?: boolean;
+  hidden?: boolean;
+  sourceType?: "primary" | "birthdays" | "holidays" | "user" | "subscribed";
 }
 
 export interface UserProfileInfo {
@@ -64,13 +70,13 @@ export interface CalendarProvider {
   createEvent(
     calendarId: string,
     event: CalendarProviderEvent
-  ): Promise<{ externalEventId: string; etag?: string }>;
+  ): Promise<{ externalEventId: string; etag?: string; updatedAt?: Date }>;
 
   updateEvent(
     calendarId: string,
     externalEventId: string,
     event: CalendarProviderEvent
-  ): Promise<{ externalEventId: string; etag?: string }>;
+  ): Promise<{ externalEventId: string; etag?: string; updatedAt?: Date }>;
 
   deleteEvent(calendarId: string, externalEventId: string): Promise<void>;
 

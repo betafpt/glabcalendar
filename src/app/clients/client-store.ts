@@ -34,7 +34,10 @@ export function loadClients(): ClientRecord[] {
   if (typeof window === "undefined") return defaultClients;
   try {
     const raw = window.localStorage.getItem(storageKey);
-    if (!raw) return defaultClients;
+    if (!raw) {
+      window.localStorage.setItem(storageKey, JSON.stringify(defaultClients));
+      return defaultClients;
+    }
     const parsed = JSON.parse(raw) as ClientRecord[];
     return Array.isArray(parsed) && parsed.length ? parsed : defaultClients;
   } catch {
@@ -43,6 +46,7 @@ export function loadClients(): ClientRecord[] {
 }
 
 export function saveClients(clients: ClientRecord[]) {
+  if (typeof window === "undefined") return;
   window.localStorage.setItem(storageKey, JSON.stringify(clients));
 }
 
@@ -54,4 +58,14 @@ export function slugifyClientName(name: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
   return base || `client-${Date.now()}`;
+}
+
+export function findClientByIdOrSlug(clients: ClientRecord[], rawId: string | undefined): ClientRecord | undefined {
+  if (!rawId) return undefined;
+  const decoded = decodeURIComponent(rawId).trim().toLowerCase();
+  return clients.find((c) => {
+    if (c.id.toLowerCase() === decoded) return true;
+    if (slugifyClientName(c.name) === decoded) return true;
+    return false;
+  });
 }

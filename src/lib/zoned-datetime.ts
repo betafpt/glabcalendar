@@ -43,3 +43,24 @@ export function zonedDateTimeLocalToIso(value: string, timeZone: string) {
   instant = new Date(localAsUtc - zoneOffsetMinutes(instant, timeZone) * 60_000);
   return instant.toISOString();
 }
+
+export function formatZonedDate(date: Date | null, timeZone: string): string {
+  if (!date) return "";
+  return new Intl.DateTimeFormat("vi-VN", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+export function formatZonedTime(date: Date | null, timeZone: string): string {
+  if (!date) return "";
+  return new Intl.DateTimeFormat("vi-VN", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(date);
+}
+

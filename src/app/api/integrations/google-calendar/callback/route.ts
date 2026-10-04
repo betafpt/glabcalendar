@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerConfig } from "@/lib/config";
 import { db } from "@/server/db";
-import { createOrganizationRepository } from "@/server/db/organizations";
+import { requireWorkspaceContext } from "@/server/workspace-context";
 import { createGoogleCalendarRepository } from "@/server/db/google-calendar";
 import { createGoogleCalendarSyncService } from "@/server/services/google-calendar-sync";
 import {
@@ -51,17 +51,16 @@ export async function GET(request: Request) {
       console.warn("Failed to retrieve Google userinfo:", err);
     }
 
-    // 3. Resolve organization
-    const orgRepo = createOrganizationRepository(db);
-    const organization = await orgRepo.getOrCreateInitial({
-      name: "G.Lab Studio",
-      timezone: config.appTimezone,
-    });
+    // 3. Resolve authenticated user & active workspace
+    const { user, organization } = await requireWorkspaceContext();
 
-    // 4. Save connection record in database
+    // 4. Primary Calendar Sync is per-user and always targets the connected user's primary calendar.
     const calendarRepo = createGoogleCalendarRepository(db);
     await calendarRepo.saveConnection(organization.id, {
+      userId: user.id,
       calendarId: "primary",
+      targetCalendarId: "primary",
+      sourceCalendarIds: JSON.stringify(["primary"]),
       accountEmail: userInfo.email ?? null,
       accountName: userInfo.name ?? null,
       accessToken: tokens.accessToken,
@@ -78,14 +77,14 @@ export async function GET(request: Request) {
       syncFromGoogle: true,
       syncToGoogle: true,
       lastSyncStatus: "idle",
-      lastSyncMessage: "Đã kết nối thành công.",
+      lastSyncMessage: "Đã kết nối với Lịch chính. Đồng bộ hai chiều đã sẵn sàng.",
       lastErrorAt: null,
     });
 
     // 5. Trigger initial background sync
     try {
       const syncService = createGoogleCalendarSyncService({ db });
-      await syncService.syncAll(organization.id);
+      await syncService.syncAll(organization.id, user.id);
     } catch (syncErr) {
       console.warn("Initial Google Calendar sync warning:", syncErr);
     }

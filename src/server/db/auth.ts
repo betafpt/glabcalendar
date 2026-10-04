@@ -48,7 +48,7 @@ export function createAuthRepository(database: Database) {
       email: string;
       name?: string | null;
       image?: string | null;
-      role?: string;
+      role?: "super_admin" | "user";
     }): Promise<User> {
       const normalizedEmail = input.email.trim().toLowerCase();
       const existing = await this.findUserByEmail(normalizedEmail);

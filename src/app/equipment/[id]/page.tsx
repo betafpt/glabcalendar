@@ -9,11 +9,12 @@ import { StatusText } from "@/components/ui/status-text";
 import { DeleteEntityButton } from "@/components/ui/delete-entity-button";
 import { errorMessage } from "@/lib/error-message";
 import type { EquipmentBooking, EquipmentItem } from "@/server/db/schema";
-import { getInitialOrganization } from "@/server/organization-context";
+import { requireWorkspaceContext } from "@/server/workspace-context";
 import { EquipmentForm } from "../equipment-form";
 import { deleteEquipmentAction } from "../actions";
 import { WorkspaceMenu } from "@/components/production/workspace-menu";
 import { ModalPopover } from "@/components/ui/modal-popover";
+import { ArrowLeft2, More } from "@/components/ui/iconsax";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +47,7 @@ async function load(id: string): Promise<{
       import("@/server/db/equipment-bookings"),
     ]);
 
-    const organization = await getInitialOrganization();
+    const { organization } = await requireWorkspaceContext();
 
     const [item, bookings] = await Promise.all([
       createEquipmentRepository(db).findById(organization.id, id),
@@ -114,17 +115,17 @@ export default async function EquipmentDetail({ params }: { params: { id: string
       <div className="flex items-center justify-between gap-3">
         <Link
           href="/equipment"
-          className="grid size-11 place-items-center rounded-full bg-surface text-2xl font-bold shadow-soft transition hover:bg-white active:scale-press"
+          className="grid size-11 place-items-center rounded-full bg-surface text-ink shadow-soft transition hover:bg-white active:scale-press"
         >
-          ‹
+          <ArrowLeft2 size={18} variant="Linear" />
           <span className="sr-only"><LocalizedText vi="Quay lại danh sách thiết bị" en="Back to equipment list" /></span>
         </Link>
         <div className="flex items-center gap-2">
           <ModalPopover
             triggerAriaLabel="Gear actions"
             trigger={
-              <span className="grid size-11 place-items-center rounded-full bg-surface text-xl shadow-soft transition hover:bg-white active:scale-press">
-                •••
+              <span className="grid size-11 place-items-center rounded-full bg-surface text-ink shadow-soft transition hover:bg-white active:scale-press">
+                <More size={20} variant="Linear" />
                 <span className="sr-only"><LocalizedText vi="Tùy chọn thiết bị" en="Gear actions" /></span>
               </span>
             }

@@ -4,6 +4,11 @@ import { DatabaseErrorBanner } from "@/components/ui/database-error-banner";
 import { LocalizedText } from "@/components/ui/localized-text";
 import { StatusChip } from "@/components/ui/status-chip";
 import { WorkspaceMenu } from "@/components/production/workspace-menu";
+import { CalendarSearchTrigger } from "@/components/calendar/calendar-search-trigger";
+import { CalendarMonthDnd } from "@/components/calendar/calendar-month-dnd";
+import { CalendarWeekDnd } from "@/components/calendar/calendar-week-dnd";
+import { CalendarViewTransition } from "@/components/ui/motion-container";
+import { LocalizedDateTime } from "@/components/ui/localized-date-time";
 import { DEFAULT_APP_TIMEZONE, getServerConfig } from "@/lib/config";
 import { errorMessage } from "@/lib/error-message";
 import {
@@ -24,7 +29,7 @@ import {
   More,
 } from "@/components/ui/iconsax";
 import type { Shoot } from "@/server/db/schema";
-import { getInitialOrganization } from "@/server/organization-context";
+import { requireWorkspaceContext } from "@/server/workspace-context";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +39,7 @@ type SearchParams = {
   projectId?: string;
   crewMemberId?: string;
   equipmentItemId?: string;
+  includeTestData?: string;
 };
 
 type PageData = {
@@ -42,6 +48,7 @@ type PageData = {
   crew: Array<{ id: string; name: string }>;
   equipment: Array<{ id: string; name: string }>;
   timezone: string;
+  shootCrewMap?: Record<string, string[]>;
   error?: string;
 };
 
@@ -66,13 +73,17 @@ const statusToneMap: Record<string, "success" | "warning" | "error" | "neutral">
   completed: "neutral",
   cancelled: "error",
   planned: "warning",
+  in_progress: "warning",
+  active: "success",
 };
 
 const statusLabels: Record<string, { vi: string; en: string }> = {
   confirmed: { vi: "Đã xác nhận", en: "Confirmed" },
   planned: { vi: "Kế hoạch", en: "Planned" },
+  in_progress: { vi: "Đang diễn ra", en: "In progress" },
   completed: { vi: "Hoàn thành", en: "Completed" },
   cancelled: { vi: "Đã hủy", en: "Cancelled" },
+  active: { vi: "Đang thực hiện", en: "Active" },
 };
 
 const weekHeaders = [
@@ -262,7 +273,7 @@ function monthGridRange(anchor: Date, timeZone: string) {
 async function loadData(
   anchor: Date,
   view: CalendarView,
-  filters: { projectId?: string; crewMemberId?: string; equipmentItemId?: string },
+  filters: { projectId?: string; crewMemberId?: string; equipmentItemId?: string; includeTestData?: boolean },
 ): Promise<PageData> {
   let timezone = DEFAULT_APP_TIMEZONE;
 
@@ -280,22 +291,64 @@ async function loadData(
       import("@/server/calendar-filter-options"),
     ]);
 
-    const organization = await getInitialOrganization();
+    const { user, organization } = await requireWorkspaceContext();
     const queryRange =
       view === "month"
         ? monthGridRange(anchor, organization.timezone)
         : calendarRange(view, anchor, organization.timezone);
-    const [shoots, filterOptions] = await Promise.all([
-      createCalendarService(createCalendarRepository(db)).list(
+    const calendarRepo = createCalendarRepository(db);
+    const { getCachedCalendarShoots, getCachedCalendarFilterOptions } = await import("@/server/cached-loaders");
+    const filtersKey = JSON.stringify(filters);
+    const [workspaceShoots, assignedShoots, filterOptions] = await Promise.all([
+      getCachedCalendarShoots(
         organization.id,
-        queryRange.start,
-        queryRange.end,
-        filters,
+        queryRange.start.toISOString(),
+        queryRange.end.toISOString(),
+        filtersKey
       ),
-      getCalendarFilterOptions(organization.id),
+      calendarRepo.listAssignedRange(user.id, queryRange.start, queryRange.end, filters),
+      getCachedCalendarFilterOptions(organization.id),
     ]);
+    const shoots = Array.from(
+      new Map([...workspaceShoots, ...assignedShoots].map((shoot) => [shoot.id, shoot])).values()
+    ).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
 
-    return { shoots, ...filterOptions, timezone: organization.timezone };
+    const shootCrewMap: Record<string, string[]> = {};
+    if (shoots.length > 0) {
+      const { inArray, eq, and } = await import("drizzle-orm");
+      const { shootCrewAssignments, crewMembers } = await import("@/server/db/schema");
+      const shootIds = shoots.map((s) => s.id);
+      const assignments = await db
+        .select({
+          shootId: shootCrewAssignments.shootId,
+          crewName: crewMembers.name,
+        })
+        .from(shootCrewAssignments)
+        .innerJoin(crewMembers, eq(crewMembers.id, shootCrewAssignments.crewMemberId))
+        .where(
+          and(
+            inArray(shootCrewAssignments.shootId, shootIds)
+          )
+        );
+      for (const a of assignments) {
+        if (!shootCrewMap[a.shootId]) {
+          shootCrewMap[a.shootId] = [];
+        }
+        shootCrewMap[a.shootId].push(a.crewName);
+      }
+    }
+
+    const formattedShoots = shoots.map((s) => {
+      let displayTitle = s.title;
+      if (s.isTestData) {
+        displayTitle = `[TEST] ${s.title}`;
+      } else if (s.syncPolicy === "excluded") {
+        displayTitle = `[LOẠI TRỪ] ${s.title}`;
+      }
+      return { ...s, title: displayTitle };
+    });
+
+    return { shoots: formattedShoots, ...filterOptions, timezone: organization.timezone, shootCrewMap };
   } catch (error) {
     return {
       shoots: [],
@@ -317,7 +370,7 @@ function queryHref(
   const search = new URLSearchParams();
   search.set("view", view);
   search.set("date", dateKey(anchor, timeZone));
-  for (const key of ["projectId", "crewMemberId", "equipmentItemId"] as const) {
+  for (const key of ["projectId", "crewMemberId", "equipmentItemId", "includeTestData"] as const) {
     const val = params[key]?.trim();
     if (val) search.set(key, val);
   }
@@ -380,6 +433,7 @@ export default async function CalendarPage({
   const projectId = searchParams.projectId?.trim() || undefined;
   const crewMemberId = searchParams.crewMemberId?.trim() || undefined;
   const equipmentItemId = searchParams.equipmentItemId?.trim() || undefined;
+  const includeTestData = searchParams.includeTestData === "true" || searchParams.includeTestData === "1";
 
   const cleanParams: SearchParams = {
     view,
@@ -387,12 +441,14 @@ export default async function CalendarPage({
     projectId,
     crewMemberId,
     equipmentItemId,
+    includeTestData: includeTestData ? "true" : undefined,
   };
 
   const data = await loadData(anchor, view, {
     projectId,
     crewMemberId,
     equipmentItemId,
+    includeTestData,
   });
 
   const previous = shiftAnchor(anchor, view, -1);
@@ -445,7 +501,7 @@ export default async function CalendarPage({
   const periodObj = periodLabels(view, anchor, range.start, range.end, data.timezone);
 
   const hasActiveFilters = Boolean(
-    projectId || crewMemberId || equipmentItemId,
+    projectId || crewMemberId || equipmentItemId || includeTestData,
   );
 
   const selectedProject = projectId
@@ -474,13 +530,22 @@ export default async function CalendarPage({
           </Link>
 
           <div className="flex items-center gap-1.5 sm:gap-2">
-            <button
-              type="button"
-              aria-label="Search calendar"
-              className="grid size-11 place-items-center rounded-full border border-stroke/70 bg-surface text-ink shadow-soft transition-all duration-fast hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 active:scale-press"
-            >
-              <Icon name="search" />
-            </button>
+            <CalendarSearchTrigger
+              shoots={data.shoots.map((s) => ({
+                id: s.id,
+                title: s.title,
+                status: s.status,
+                startsAt: s.startsAt.toISOString(),
+                endsAt: s.endsAt.toISOString(),
+                locationName: s.locationName,
+                locationAddress: s.locationAddress,
+                projectId: s.projectId,
+                projectName: s.projectId ? projectMap.get(s.projectId) : undefined,
+                crewNames: data.shootCrewMap?.[s.id] || [],
+              }))}
+              projectMap={Object.fromEntries(projectMap.entries())}
+              timezone={data.timezone}
+            />
 
             <a
               href="#calendar-filters"
@@ -658,6 +723,25 @@ export default async function CalendarPage({
                 </Link>
               </span>
             ) : null}
+            {includeTestData ? (
+              <span className="inline-flex items-center gap-1 rounded-pill bg-[#e59b00]/15 border border-[#e59b00]/30 px-2.5 py-0.5 text-[10px] font-black text-[#b45309]">
+                <span>
+                  <LocalizedText vi="Dữ liệu test: Đang hiện" en="Test data: Visible" />
+                </span>
+                <Link
+                  href={queryHref(
+                    view,
+                    anchor,
+                    { ...cleanParams, includeTestData: undefined },
+                    data.timezone,
+                  )}
+                  className="hover:opacity-70 font-bold"
+                  aria-label="Hide test data"
+                >
+                  ×
+                </Link>
+              </span>
+            ) : null}
             <Link
               href={queryHref(view, anchor, {}, data.timezone)}
               className="text-[10px] font-black text-secondary hover:text-ink underline ml-1"
@@ -702,133 +786,39 @@ export default async function CalendarPage({
       ) : null}
 
       {/* PRIMARY CALENDAR VIEW EXPERIENCE */}
-      {view === "month" ? (
-        <section className="mx-auto mt-4 sm:mt-5 max-w-[1040px] overflow-hidden rounded-r24 sm:rounded-r28 border border-stroke/80 bg-white/60 shadow-soft backdrop-blur-sm">
-          {/* Weekday Column Headers */}
-          <div className="grid grid-cols-7 border-b border-stroke/70 bg-surface/90 py-2 sm:py-2.5 text-center">
-            {weekHeaders.map((day) => (
-              <div
-                key={day.en}
-                className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.08em]"
-              >
-                <span className={day.isWeekend ? "text-pink" : "text-secondary"}>
-                  <LocalizedText vi={day.vi} en={day.en} />
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {/* 7-Column Month Days Grid */}
-          <div className="grid grid-cols-7">
-            {monthGridDays.map((day, dayIndex) => {
+      <CalendarViewTransition viewKey={`${view}-${cleanParams.date ?? ""}`}>
+        {view === "month" ? (
+          <CalendarMonthDnd
+            days={monthGridDays.map((day) => {
               const key = dateKey(day, data.timezone);
               const shoots = grouped.get(key) ?? [];
               const isToday = key === todayKey;
               const dayParts = zonedDateParts(day, data.timezone);
               const outsideMonth = dayParts.month !== anchorMonth;
-
-              return (
-                <article
-                  key={key}
-                  className={`group relative flex flex-col justify-between border-b border-r border-stroke/60 transition-colors duration-fast ${
-                    outsideMonth
-                      ? "bg-[#faf5f8]/45 hover:bg-white/60 text-secondary/40"
-                      : isToday
-                      ? "bg-pink/[0.04] hover:bg-white/90"
-                      : "bg-surface/50 hover:bg-white"
-                  } min-h-[70px] p-1 sm:min-h-[96px] sm:p-1.5 lg:min-h-[120px] lg:p-2`}
-                >
-                  {/* Day Cell Top: Date number and indicators */}
-                  <div className="flex items-center justify-between gap-1">
-                    <Link
-                      href={queryHref("day", day, cleanParams, data.timezone)}
-                      className={`grid size-5 sm:size-6 lg:size-7 place-items-center rounded-full text-[10px] sm:text-[11px] lg:text-xs font-black transition-all duration-fast ${
-                        isToday
-                          ? "bg-pink text-white shadow-soft ring-2 ring-pink/20 scale-105"
-                          : outsideMonth
-                          ? "text-secondary/40 hover:bg-ink/5"
-                          : "text-ink hover:bg-ink hover:text-white"
-                      }`}
-                      title={
-                        isToday
-                          ? "Today"
-                          : new Intl.DateTimeFormat("en", {
-                              timeZone: data.timezone,
-                              dateStyle: "medium",
-                            }).format(day)
-                      }
-                    >
-                      {dayParts.day}
-                    </Link>
-
-                    {isToday ? (
-                      <span className="hidden sm:inline-flex items-center rounded-pill bg-pink/10 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-pink">
-                        <LocalizedText vi="Hôm nay" en="Today" />
-                      </span>
-                    ) : shoots.length > 0 ? (
-                      <span className="text-[9px] font-black text-secondary/60 pr-0.5 tabular-nums">
-                        {shoots.length}
-                      </span>
-                    ) : null}
-                  </div>
-
-                  {/* Day Cell Events List */}
-                  <div className="mt-1 flex flex-1 flex-col gap-1 min-w-0">
-                    {shoots.slice(0, 2).map((shoot, shootIndex) => {
-                      const tone =
-                        eventTones[
-                          (dayIndex + shootIndex) % eventTones.length
-                        ];
-                      const dotTone =
-                        toneAccentDots[
-                          (dayIndex + shootIndex) % toneAccentDots.length
-                        ];
-
-                      return (
-                        <Link
-                          key={shoot.id}
-                          href={`/shoots/${shoot.id}`}
-                          title={`${shoot.title} (${formatTime(
-                            shoot.startsAt,
-                            data.timezone,
-                          )})`}
-                          className={`group/item block w-full min-w-0 rounded-[5px] sm:rounded-r10 px-1 sm:px-1.5 py-0.5 sm:py-1 text-left transition-all duration-fast hover:-translate-y-0.5 hover:shadow-sm active:scale-press ${tone} ${isPastOrCompletedShoot(shoot, now) ? "opacity-45 grayscale-[35%]" : ""}`}
-                        >
-                          <div className="flex items-center gap-1 min-w-0">
-                            <span
-                              className={`size-1.5 shrink-0 rounded-full ${dotTone}`}
-                            />
-                            <span className="hidden lg:inline text-[9px] font-black text-ink/70 tabular-nums">
-                              {formatTime(shoot.startsAt, data.timezone)}
-                            </span>
-                            <span className="truncate text-[8px] sm:text-[9px] lg:text-[10px] font-black leading-tight text-ink">
-                              {shoot.title}
-                            </span>
-                          </div>
-                        </Link>
-                      );
-                    })}
-
-                    {shoots.length > 2 ? (
-                      <Link
-                        href={queryHref(
-                          "day",
-                          day,
-                          cleanParams,
-                          data.timezone,
-                        )}
-                        className="mt-auto block text-center rounded-pill bg-ink/5 hover:bg-ink hover:text-white px-1 py-0.5 text-[7px] sm:text-[8px] lg:text-[9px] font-black leading-none text-secondary transition-colors"
-                      >
-                        +{shoots.length - 2} <LocalizedText vi="khác" en="more" />
-                      </Link>
-                    ) : null}
-                  </div>
-                </article>
-              );
+              return {
+                dateKey: key,
+                dayNumber: dayParts.day,
+                isToday,
+                outsideMonth,
+                dayIso: day.toISOString(),
+                shoots: shoots.map((s) => ({
+                  id: s.id,
+                  title: s.title,
+                  startsAt: s.startsAt.toISOString(),
+                  endsAt: s.endsAt.toISOString(),
+                  status: s.status,
+                  isPastOrCompleted: isPastOrCompletedShoot(s, now),
+                  projectId: s.projectId,
+                  locationName: s.locationName,
+                })),
+              };
             })}
-          </div>
-        </section>
-      ) : view === "week" ? (
+            timezone={data.timezone}
+            todayKey={todayKey}
+            weekHeaders={weekHeaders}
+            cleanParams={cleanParams}
+          />
+        ) : view === "week" ? (
         <CalendarWeekView
           anchor={anchor}
           data={data}
@@ -850,6 +840,7 @@ export default async function CalendarPage({
           now={now}
         />
       )}
+      </CalendarViewTransition>
 
       {/* Visual Accent Legend Bar */}
       <div className="mx-auto mt-4 sm:mt-5 flex max-w-[1040px] items-center gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-2">
@@ -1048,6 +1039,30 @@ export default async function CalendarPage({
           >
             <LocalizedText vi="Xóa lọc" en="Clear" />
           </Link>
+
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-stroke/50 pt-3 sm:col-span-2 lg:col-span-5">
+            <label className="flex items-center gap-2.5 cursor-pointer select-none text-xs font-bold text-ink">
+              <input
+                type="checkbox"
+                name="includeTestData"
+                value="true"
+                defaultChecked={includeTestData}
+                className="size-4 rounded accent-pink cursor-pointer"
+              />
+              <span>
+                <LocalizedText
+                  vi="Hiện dữ liệu test / loại trừ đồng bộ (Quản trị viên)"
+                  en="Show test & excluded data (Admin filter)"
+                />
+              </span>
+            </label>
+            <span className="text-[11px] font-medium text-secondary">
+              <LocalizedText
+                vi="Mặc định ẩn các lịch test, lịch cá nhân và sự kiện loại trừ."
+                en="Test events and excluded items are hidden by default."
+              />
+            </span>
+          </div>
         </form>
       </details>
     </AppScreen>
@@ -1192,9 +1207,9 @@ function CalendarWeekView({
         })}
       </div>
 
-      {/* DESKTOP & TABLET: FULL 7-DAY MULTI-COLUMN BOARD */}
-      <div className="mt-4 hidden md:grid md:grid-cols-7 divide-x divide-stroke/70 rounded-r22 border border-stroke/70 bg-white/60 overflow-hidden shadow-soft">
-        {weekDaysList.map((day, dayIndex) => {
+      {/* DESKTOP & TABLET: FULL 7-DAY MULTI-COLUMN BOARD WITH DND */}
+      <CalendarWeekDnd
+        columns={weekDaysList.map((day, dayIndex) => {
           const key = dateKey(day, data.timezone);
           const isToday = key === todayKey;
           const isAnchor = key === anchorKey;
@@ -1202,137 +1217,32 @@ function CalendarWeekView({
             (a, b) => a.startsAt.getTime() - b.startsAt.getTime()
           );
           const header = weekHeaders[dayIndex];
+          const dayParts = zonedDateParts(day, data.timezone);
 
-          return (
-            <div
-              key={key}
-              className={`flex flex-col min-h-[380px] lg:min-h-[440px] transition-colors ${
-                isToday
-                  ? "bg-pink/[0.03]"
-                  : isAnchor
-                  ? "bg-surface/90"
-                  : "bg-surface/40 hover:bg-white/60"
-              }`}
-            >
-              {/* Column Header */}
-              <div className="border-b border-stroke/70 p-2 sm:p-2.5 text-center bg-surface/80">
-                <p
-                  className={`text-[10px] font-black uppercase tracking-wider ${
-                    header.isWeekend ? "text-pink" : "text-secondary"
-                  }`}
-                >
-                  <LocalizedText vi={header.vi} en={header.en} />
-                </p>
-                <Link
-                  href={queryHref("day", day, searchParams, data.timezone)}
-                  className={`mt-1 inline-grid size-7 lg:size-8 place-items-center rounded-full font-display text-base lg:text-lg font-black transition-all hover:scale-110 ${
-                    isToday
-                      ? "bg-pink text-white shadow-soft"
-                      : isAnchor
-                      ? "bg-ink text-white"
-                      : "text-ink hover:bg-ink hover:text-white"
-                  }`}
-                >
-                  {new Intl.DateTimeFormat("en", {
-                    timeZone: data.timezone,
-                    day: "numeric",
-                  }).format(day)}
-                </Link>
-
-                <div className="mt-1">
-                  {dayShoots.length > 0 ? (
-                    <span className="inline-block rounded-pill bg-ink/5 px-2 py-0.5 text-[9px] font-black text-ink">
-                      {dayShoots.length}{" "}
-                      <LocalizedText vi="buổi" en="shoots" />
-                    </span>
-                  ) : (
-                    <span className="inline-block text-[9px] font-bold text-secondary/40">
-                      <LocalizedText vi="Trống" en="Free" />
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Column Content: Shoots List */}
-              <div className="flex-1 p-1.5 lg:p-2 space-y-1.5 flex flex-col">
-                {dayShoots.map((shoot, shootIndex) => {
-                  const tone =
-                    eventTones[(dayIndex + shootIndex) % eventTones.length];
-                  const dotTone =
-                    toneAccentDots[(dayIndex + shootIndex) % toneAccentDots.length];
-
-                  return (
-                    <Link
-                      key={shoot.id}
-                      href={`/shoots/${shoot.id}`}
-                      title={`${shoot.title} (${formatTime(
-                        shoot.startsAt,
-                        data.timezone
-                      )} — ${formatTime(shoot.endsAt, data.timezone)})`}
-                      className={`group/card block rounded-r14 p-2 transition-all duration-fast hover:-translate-y-0.5 hover:shadow-md active:scale-press ${tone} ${isPastOrCompletedShoot(shoot, now) ? "opacity-45 grayscale-[35%]" : ""}`}
-                    >
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="flex items-center gap-1 min-w-0">
-                          <span className={`size-1.5 shrink-0 rounded-full ${dotTone}`} />
-                          <span className="truncate text-[9px] font-black text-ink/75 tabular-nums">
-                            {formatTime(shoot.startsAt, data.timezone)}
-                          </span>
-                        </span>
-                        <span className="text-[8px] font-bold text-ink/60 tabular-nums">
-                          {shootDuration(shoot.startsAt, shoot.endsAt)}
-                        </span>
-                      </div>
-
-                      {shoot.projectId && projectMap.get(shoot.projectId) ? (
-                        <p className="mt-1 truncate text-[8px] font-black uppercase tracking-wider text-ink/65">
-                          {projectMap.get(shoot.projectId)}
-                        </p>
-                      ) : null}
-
-                      <h4 className="mt-0.5 font-display text-[11px] lg:text-xs font-black uppercase leading-tight tracking-tight text-ink line-clamp-2">
-                        {shoot.title}
-                      </h4>
-
-                      {shoot.locationName ? (
-                        <p className="mt-1 flex items-center gap-0.5 text-[8px] font-bold text-ink/70 truncate">
-                          <Icon name="location" />
-                          <span className="truncate">{shoot.locationName}</span>
-                        </p>
-                      ) : null}
-
-                      <div className="mt-1.5 flex items-center justify-between pt-1 border-t border-ink/10">
-                        <span className="rounded-pill bg-white/80 px-1.5 py-0.5 text-[7px] lg:text-[8px] font-black uppercase text-ink">
-                          <LocalizedText
-                            vi={statusLabels[shoot.status]?.vi ?? shoot.status}
-                            en={statusLabels[shoot.status]?.en ?? shoot.status}
-                          />
-                        </span>
-                        <span className="text-[10px] text-ink opacity-0 group-hover/card:opacity-100 transition-opacity">
-                          →
-                        </span>
-                      </div>
-                    </Link>
-                  );
-                })}
-
-                {dayShoots.length === 0 ? (
-                  <Link
-                    href="/shoots"
-                    className="group flex flex-1 flex-col items-center justify-center rounded-r14 border border-dashed border-stroke/70 p-2 text-center transition-colors hover:border-pink/40 hover:bg-pink/[0.02]"
-                  >
-                    <span className="grid size-5 place-items-center rounded-full bg-surface text-secondary text-[10px] font-black group-hover:bg-pink group-hover:text-white transition-colors">
-                      +
-                    </span>
-                    <span className="mt-1 text-[8px] font-bold text-secondary/60 group-hover:text-pink transition-colors">
-                      <LocalizedText vi="Lên lịch" en="Schedule" />
-                    </span>
-                  </Link>
-                ) : null}
-              </div>
-            </div>
-          );
+          return {
+            dateKey: key,
+            dayNumber: dayParts.day,
+            isToday,
+            isAnchor,
+            header,
+            dayIso: day.toISOString(),
+            shoots: dayShoots.map((s) => ({
+              id: s.id,
+              title: s.title,
+              startsAt: s.startsAt.toISOString(),
+              endsAt: s.endsAt.toISOString(),
+              status: s.status,
+              isPastOrCompleted: isPastOrCompletedShoot(s, now),
+              projectId: s.projectId,
+              locationName: s.locationName,
+            })),
+          };
         })}
-      </div>
+        timezone={data.timezone}
+        cleanParams={searchParams}
+        projectMap={Object.fromEntries(projectMap.entries())}
+        statusLabels={statusLabels}
+      />
 
       {/* MOBILE: RESPONSIVE DAY-BY-DAY AGENDA FEED */}
       <div className="mt-4 space-y-3 block md:hidden">
@@ -1508,10 +1418,6 @@ function CalendarDayTimelineView({
     const eMinute = zonedTimeParts(shoot.endsAt, data.timezone).minute;
     if (sHour < minHour) minHour = Math.max(0, sHour);
     if (eHour > maxHour) maxHour = Math.min(23, eHour + (eMinute > 0 ? 1 : 0));
-    if (shoot.callTime) {
-      const cHour = zonedTimeParts(shoot.callTime, data.timezone).hour;
-      if (cHour < minHour) minHour = Math.max(0, cHour);
-    }
   }
 
   const timelineHours: number[] = [];
@@ -1521,16 +1427,6 @@ function CalendarDayTimelineView({
 
   const isToday = anchorKey === todayKey;
   const nowParts = zonedTimeParts(now, data.timezone);
-
-  // Earliest call time
-  const shootsWithCallTime = dayShoots.filter((s) => s.callTime);
-  const earliestCall =
-    shootsWithCallTime.length > 0
-      ? shootsWithCallTime.reduce(
-          (earliest, s) => (s.callTime! < earliest ? s.callTime! : earliest),
-          shootsWithCallTime[0].callTime!
-        )
-      : null;
 
   // Unique projects count
   const uniqueProjects = new Set(
@@ -1550,13 +1446,17 @@ function CalendarDayTimelineView({
             />
           </p>
           <h2 className="mt-0.5 font-display text-2xl sm:text-3xl lg:text-4xl font-black uppercase tracking-tight text-ink">
-            {new Intl.DateTimeFormat("en", {
-              timeZone: data.timezone,
-              weekday: "long",
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            }).format(anchor)}
+            <LocalizedDateTime
+              value={anchor.toISOString()}
+              options={{
+                weekday: "long",
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+                timeZone: data.timezone,
+              }}
+              uppercase
+            />
           </h2>
         </div>
 
@@ -1604,16 +1504,6 @@ function CalendarDayTimelineView({
             <span className="size-1.5 rounded-full bg-[#7a58ec]" />
             <span>
               {uniqueProjects.size} <LocalizedText vi="dự án" en="projects" />
-            </span>
-          </span>
-        ) : null}
-
-        {earliestCall ? (
-          <span className="inline-flex items-center gap-1.5 rounded-pill border border-stroke/60 bg-surface px-2.5 py-1 text-[11px] font-black text-ink shadow-soft">
-            <Icon name="clock" />
-            <span>
-              <LocalizedText vi="Call time sớm nhất: " en="Earliest call: " />
-              {formatTime(earliestCall, data.timezone)}
             </span>
           </span>
         ) : null}
@@ -1765,22 +1655,6 @@ function CalendarDayTimelineView({
                                   {shoot.title}
                                 </h3>
 
-                                {shoot.callTime ? (
-                                  <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-pill bg-ink/10 px-2.5 py-0.5 text-[10px] sm:text-xs font-black text-ink">
-                                    <Icon name="clock" />
-                                    <span>
-                                      <LocalizedText
-                                        vi="Giờ tập trung (Call Time): "
-                                        en="Call Time: "
-                                      />
-                                      {formatTime(
-                                        shoot.callTime,
-                                        data.timezone
-                                      )}
-                                    </span>
-                                  </div>
-                                ) : null}
-
                                 {shoot.locationName ? (
                                   <p className="mt-1.5 flex items-center gap-1.5 text-xs sm:text-sm font-bold text-ink/80 truncate">
                                     <Icon name="location" />
@@ -1793,11 +1667,7 @@ function CalendarDayTimelineView({
                                   </p>
                                 ) : null}
 
-                                {shoot.notes ? (
-                                  <p className="mt-2 rounded-r10 bg-white/50 border border-ink/5 p-2 text-xs font-medium italic text-ink/80">
-                                    &quot;{shoot.notes}&quot;
-                                  </p>
-                                ) : null}
+
                               </div>
 
                               <span className="grid size-8 sm:size-9 place-items-center rounded-full bg-white/80 text-ink shadow-sm transition group-hover/card:bg-ink group-hover/card:text-white">

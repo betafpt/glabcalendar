@@ -9,6 +9,8 @@ import { Add, SearchNormal1, ArrowRight2 } from "@/components/ui/iconsax";
 import { useLanguage } from "@/components/language-provider";
 import { ClientRecord, loadClients, saveClients, slugifyClientName } from "./client-store";
 
+import { listClientsAction, createClientAction } from "./actions";
+
 function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "CL";
 }
@@ -19,25 +21,29 @@ export default function ClientsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const { locale } = useLanguage();
 
-  useEffect(() => setClients(loadClients()), []);
+  useEffect(() => {
+    listClientsAction().then((data) => setClients(data));
+  }, []);
 
   const filteredClients = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
     return normalized ? clients.filter((client) => client.name.toLocaleLowerCase().includes(normalized)) : clients;
   }, [clients, query]);
 
-  function addClient(event: FormEvent<HTMLFormElement>) {
+  async function addClient(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const name = String(form.get("name") || "").trim();
     if (!name) return;
-    const baseId = slugifyClientName(name);
-    const id = clients.some((client) => client.id === baseId) ? `${baseId}-${Date.now()}` : baseId;
-    const next: ClientRecord = { id, name, projects: 0, email: String(form.get("email") || "").trim(), phone: String(form.get("phone") || "").trim(), website: "", address: "", description: "", notes: "", contacts: [] };
-    const updated = [...clients, next];
-    setClients(updated);
-    saveClients(updated);
-    setShowCreate(false);
+    const res = await createClientAction({
+      name,
+      email: String(form.get("email") || "").trim(),
+      phone: String(form.get("phone") || "").trim(),
+    });
+    if (res.ok && res.client) {
+      setClients((prev) => [...prev, res.client!]);
+      setShowCreate(false);
+    }
   }
 
   return (

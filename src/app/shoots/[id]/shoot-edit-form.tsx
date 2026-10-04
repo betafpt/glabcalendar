@@ -8,6 +8,7 @@ import { LocalizedText } from "@/components/ui/localized-text";
 import { useLanguage } from "@/components/language-provider";
 import { localizeErrorMessage } from "@/i18n/errors";
 import { formatDateTimeLocal } from "@/lib/zoned-datetime";
+import { MapTilerAddressAutocomplete } from "@/components/ui/maptiler-address-autocomplete";
 import { updateShootAction, type ShootActionState } from "../actions";
 
 const initialState: ShootActionState = { ok: false };
@@ -71,6 +72,7 @@ export function ShootEditForm({ shoot, projects, timezone }: { shoot: Shoot; pro
           <select id="edit-status" name="status" defaultValue={shoot.status} className={`${fieldClass} border-0 bg-surface/85`}>
             <option value="planned"><LocalizedText vi="Kế hoạch" en="Planned" /></option>
             <option value="confirmed"><LocalizedText vi="Đã xác nhận" en="Confirmed" /></option>
+            <option value="ready"><LocalizedText vi="Sẵn sàng" en="Ready" /></option>
             <option value="in_progress"><LocalizedText vi="Đang diễn ra" en="In progress" /></option>
             <option value="completed"><LocalizedText vi="Hoàn thành" en="Completed" /></option>
             <option value="cancelled"><LocalizedText vi="Đã hủy" en="Cancelled" /></option>
@@ -108,17 +110,6 @@ export function ShootEditForm({ shoot, projects, timezone }: { shoot: Shoot; pro
         </FieldCard>
       </div>
 
-      <FieldCard tone="bg-yellow">
-        <label htmlFor="edit-callTime" className={labelClass}><LocalizedText vi="GIỜ TẬP TRUNG" en="CALL TIME" /></label>
-        <input
-          id="edit-callTime"
-          name="callTime"
-          type="datetime-local"
-          defaultValue={formatDateTimeLocal(shoot.callTime, timezone)}
-          className={`${fieldClass} border-0 bg-surface/85`}
-        />
-      </FieldCard>
-
       <div className="grid gap-3 sm:grid-cols-2">
         <FieldCard tone="bg-sky">
           <label htmlFor="edit-locationName" className={labelClass}>
@@ -136,12 +127,12 @@ export function ShootEditForm({ shoot, projects, timezone }: { shoot: Shoot; pro
           <label htmlFor="edit-locationAddress" className={labelClass}>
             <LocalizedText vi="ĐỊA CHỈ" en="ADDRESS" />
           </label>
-          <input
+          <MapTilerAddressAutocomplete
             id="edit-locationAddress"
             name="locationAddress"
             defaultValue={shoot.locationAddress ?? ""}
             placeholder="Google Maps: số nhà, đường, địa điểm..."
-            className={`${fieldClass} border-0 bg-surface/85`}
+            className="border-0 bg-surface/85"
           />
         </FieldCard>
       </div>

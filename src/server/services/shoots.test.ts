@@ -16,6 +16,10 @@ const shoot: Shoot = {
   notes: null,
   createdAt: new Date("2026-09-29T00:00:00Z"),
   updatedAt: new Date("2026-09-29T00:00:00Z"),
+  syncPolicy: "local_only",
+  isTestData: false,
+  sourceCalendarId: null,
+  externalEventId: null,
 };
 
 function repository(): ShootRepositoryPort {

@@ -10,10 +10,11 @@ import { DeleteEntityButton } from "@/components/ui/delete-entity-button";
 import { getServerConfig } from "@/lib/config";
 import { errorMessage } from "@/lib/error-message";
 import type { CrewMember, Shoot, ShootCrewAssignment } from "@/server/db/schema";
-import { getInitialOrganization } from "@/server/organization-context";
+import { requireWorkspaceContext } from "@/server/workspace-context";
 import { CrewForm } from "../crew-form";
 import { deleteCrewAction } from "../actions";
 import { WorkspaceMenu } from "@/components/production/workspace-menu";
+import { Calendar, ArrowLeft2 } from "@/components/ui/iconsax";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +48,7 @@ async function load(id: string): Promise<{
       import("@/server/db/crew-assignments"),
     ]);
 
-    const organization = await getInitialOrganization();
+    const { organization } = await requireWorkspaceContext();
 
     const [member, assignedShoots] = await Promise.all([
       createCrewRepository(db).findById(organization.id, id),
@@ -129,17 +130,17 @@ export default async function CrewDetail({ params }: { params: { id: string } })
       <div className="flex items-center justify-between gap-3">
         <Link
           href="/crew"
-          className="grid size-11 place-items-center rounded-full bg-surface text-xl font-black shadow-soft transition hover:bg-white active:scale-press"
+          className="grid size-11 place-items-center rounded-full bg-surface text-ink shadow-soft transition hover:bg-white active:scale-press"
         >
-          ←
+          <ArrowLeft2 size={18} variant="Linear" />
           <span className="sr-only"><LocalizedText vi="Quay lại danh sách nhân sự" en="Back to crew" /></span>
         </Link>
         <div className="flex items-center gap-2">
           <Link
             href="/calendar"
-            className="grid size-11 place-items-center rounded-full bg-surface text-base font-bold shadow-soft transition hover:bg-white active:scale-press"
+            className="grid size-11 place-items-center rounded-full bg-surface text-ink shadow-soft transition hover:bg-white active:scale-press"
           >
-            📅
+            <Calendar size={18} variant="Linear" />
             <span className="sr-only"><LocalizedText vi="Xem lịch" en="View calendar" /></span>
           </Link>
           <WorkspaceMenu />

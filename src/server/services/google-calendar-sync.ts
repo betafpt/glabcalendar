@@ -11,6 +11,7 @@ import {
   GoogleAuthRevokedError,
 } from "@/server/integrations/calendar/types";
 import type { Shoot, GoogleCalendarConnection } from "@/server/db/schema";
+import { isGoogleBirthdayCalendarId } from "@/server/integrations/calendar/google-calendar-sources";
 
 /**
  * Computes a deterministic hash of shoot fields relevant for calendar synchronization.
@@ -48,6 +49,7 @@ export function computeShootSyncHash(shoot: {
  */
 export function shootToCalendarEvent(
   shoot: Shoot,
+  userId: string,
   timeZone = "Asia/Ho_Chi_Minh"
 ): CalendarProviderEvent {
   const locationParts = [shoot.locationName, shoot.locationAddress]
@@ -60,14 +62,6 @@ export function shootToCalendarEvent(
     descriptionParts.push(shoot.notes.trim());
   }
   descriptionParts.push(`\n[G.Lab Calendar: Shoot ID: ${shoot.id}]`);
-  if (shoot.callTime) {
-    const callTimeStr = new Intl.DateTimeFormat("en", {
-      timeStyle: "short",
-      dateStyle: "short",
-      timeZone,
-    }).format(new Date(shoot.callTime));
-    descriptionParts.push(`Call time: ${callTimeStr}`);
-  }
 
   return {
     summary: shoot.title,
@@ -84,8 +78,9 @@ export function shootToCalendarEvent(
     status: shoot.status === "cancelled" ? "cancelled" : "confirmed",
     extendedProperties: {
       private: {
+        glabManaged: "true",
         glabShootId: shoot.id,
-        glabOrganizationId: shoot.organizationId,
+        glabUserId: userId,
       },
     },
   };
@@ -119,13 +114,46 @@ function getDefaultDb(): Database {
 }
 
 /**
+ * Checks if a given calendar ID refers to the Google Primary Calendar (either literal 'primary' or user's email).
+ */
+export function isPrimaryCalendar(
+  calendarId: string | null | undefined,
+  accountEmail?: string | null
+): boolean {
+  if (!calendarId) return false;
+  const normalized = calendarId.trim().toLowerCase();
+  if (normalized === "primary") return true;
+  if (accountEmail && normalized === accountEmail.trim().toLowerCase()) return true;
+  return false;
+}
+
+/**
+ * Resolves the target Google calendar ID for exporting shoots.
+ * Primary Calendar Sync always exports to the signed-in user's primary calendar.
+ */
+export function resolveTargetCalendarId(
+  _conn: GoogleCalendarConnection,
+  _explicitCalendarId?: string
+): string {
+  return "primary";
+}
+
+/**
+ * Resolves the source Google calendar IDs for importing shoots into G.Lab.
+ * Primary Calendar Sync always imports from the signed-in user's primary calendar.
+ */
+export function resolveSourceCalendarIds(conn: GoogleCalendarConnection): string[] {
+  return isGoogleBirthdayCalendarId(conn.calendarId) ? [] : ["primary"];
+}
+
+/**
  * Creates the Google Calendar synchronization service.
  */
 export function createGoogleCalendarSyncService(deps: GoogleCalendarSyncServiceDeps = {}) {
   const calendarRepo = deps.repository ?? createGoogleCalendarRepository(deps.db ?? getDefaultDb());
   const shootRepo = deps.shootRepository ?? createShootRepository(deps.db ?? getDefaultDb());
 
-  function getProviderClient(connection: GoogleCalendarConnection): CalendarProvider {
+  function getProviderClient(connection: GoogleCalendarConnection, userId: string): CalendarProvider {
     if (deps.createProvider) {
       return deps.createProvider(connection);
     }
@@ -142,7 +170,7 @@ export function createGoogleCalendarSyncService(deps: GoogleCalendarSyncServiceD
           accessToken: newAccessToken,
           expiresAt,
           refreshToken: newRefreshToken,
-        });
+        }, "primary", userId);
       },
     });
   }
@@ -151,19 +179,19 @@ export function createGoogleCalendarSyncService(deps: GoogleCalendarSyncServiceD
     /**
      * Retrieves the active connection record for an organization.
      */
-    async getConnection(organizationId: string) {
-      return calendarRepo.getConnection(organizationId);
+    async getConnection(organizationId: string, userId: string) {
+      return calendarRepo.getUserConnection(organizationId, userId);
     },
 
     /**
      * Disconnects Google Calendar safely, clearing tokens and updating status.
      */
-    async disconnect(organizationId: string, calendarId = "primary"): Promise<void> {
-      const conn = await calendarRepo.getConnection(organizationId, calendarId);
+    async disconnect(organizationId: string, userId: string, calendarId = "primary"): Promise<void> {
+      const conn = await calendarRepo.getUserConnection(organizationId, userId, calendarId);
       if (conn?.accessToken) {
         await revokeGoogleToken(conn.accessToken);
       }
-      await calendarRepo.disconnect(organizationId, calendarId);
+      await calendarRepo.disconnect(organizationId, calendarId, userId);
     },
 
     /**
@@ -171,58 +199,101 @@ export function createGoogleCalendarSyncService(deps: GoogleCalendarSyncServiceD
      */
     async updateSettings(
       organizationId: string,
+      userId: string,
       settings: Partial<
         Pick<
           GoogleCalendarConnection,
+          | "syncEnabled"
           | "syncFromGoogle"
           | "syncToGoogle"
           | "syncShoots"
           | "syncMeetings"
           | "syncLocationScout"
           | "syncInternalEvents"
+          | "targetCalendarId"
+          | "sourceCalendarIds"
         >
       >
     ) {
-      return calendarRepo.updateSettings(organizationId, settings);
+      const sanitized = { ...settings };
+      if (typeof sanitized.sourceCalendarIds === "string" && sanitized.sourceCalendarIds) {
+        try {
+          const ids = JSON.parse(sanitized.sourceCalendarIds);
+          if (Array.isArray(ids)) {
+            sanitized.sourceCalendarIds = JSON.stringify(
+              ids.map(String).filter((id) => !isGoogleBirthdayCalendarId(id))
+            );
+          }
+        } catch {
+          sanitized.sourceCalendarIds = sanitized.sourceCalendarIds
+            .split(",")
+            .map((id) => id.trim())
+            .filter((id) => id && !isGoogleBirthdayCalendarId(id))
+            .join(",");
+        }
+      }
+      return calendarRepo.updateSettings(organizationId, sanitized, "primary", userId);
+    },
+
+    /**
+     * Lists all calendars available in the user's Google account.
+     */
+    async listAvailableCalendars(organizationId: string, userId: string): Promise<import("@/server/integrations/calendar/types").CalendarInfo[]> {
+      const conn = await calendarRepo.getUserConnection(organizationId, userId);
+      if (!conn || conn.status !== "connected" || !conn.accessToken) {
+        return [];
+      }
+      try {
+        const provider = getProviderClient(conn, userId);
+        const calendars = await provider.listCalendars();
+        return calendars.filter((calendar) => !isGoogleBirthdayCalendarId(calendar.id));
+      } catch (err) {
+        console.warn("Failed to list Google Calendars:", err);
+        return [];
+      }
     },
 
     /**
      * Pushes a single G.Lab shoot to Google Calendar.
      * Fully idempotent: duplicate calls with identical data perform no external API mutations.
+     * Rule 3: Only export events with syncPolicy === "google" and isTestData === false.
+     * Primary Calendar Sync exports to the user's primary calendar.
      */
     async syncShootToGoogle(
       organizationId: string,
-      shootId: string,
-      calendarId = "primary"
+      userId: string,
+      shootId: string
     ): Promise<SyncResult> {
       try {
-        const conn = await calendarRepo.getConnection(organizationId, calendarId);
+        const conn = await calendarRepo.getUserConnection(organizationId, userId);
         if (!conn || conn.status !== "connected" || !conn.syncEnabled || !conn.syncToGoogle) {
           return { ok: true, action: "skipped_disabled" };
         }
 
         const shoot = await shootRepo.findById(organizationId, shootId);
-        if (!shoot) {
-          return { ok: false, action: "not_found", message: "Shoot not found." };
+        if (!shoot) return { ok: false, action: "not_found", message: "Shoot not found." };
+        if (shoot.syncPolicy !== "google" || shoot.isTestData) {
+          return { ok: true, action: "skipped_disabled", message: "Buổi quay này đã được loại khỏi đồng bộ Google Calendar." };
         }
 
-        const provider = getProviderClient(conn);
-        const existingSync = await calendarRepo.getShootSync(organizationId, shootId);
+        const targetCalId = "primary";
+        const provider = getProviderClient(conn, userId);
+        const existingSync = await calendarRepo.getShootSync(organizationId, shootId, "google", userId);
         const currentHash = computeShootSyncHash(shoot);
 
-        // Handle Shoot Cancellation
         if (shoot.status === "cancelled") {
           if (existingSync && existingSync.syncStatus !== "cancelled") {
             try {
-              await provider.deleteEvent(conn.calendarId, existingSync.externalEventId);
+              await provider.deleteEvent(targetCalId, existingSync.externalEventId);
             } catch (err) {
-              console.warn("Failed to delete cancelled event in Google Calendar:", err);
+              console.warn("Failed to delete cancelled G.Lab event in Google Calendar:", err);
             }
             await calendarRepo.saveShootSync({
-              organizationId,
-              shootId,
-              externalCalendarId: conn.calendarId,
+              organizationId, userId, shootId,
+              externalCalendarId: targetCalId,
               externalEventId: existingSync.externalEventId,
+              externalEventEtag: existingSync.externalEventEtag,
+              externalEventUpdatedAt: new Date(),
               lastSyncHash: currentHash,
               syncStatus: "cancelled",
             });
@@ -231,308 +302,285 @@ export function createGoogleCalendarSyncService(deps: GoogleCalendarSyncServiceD
           return { ok: true, action: "skipped_identical" };
         }
 
-        // Idempotency check: if unchanged, skip mutation
-        if (
-          existingSync &&
-          existingSync.lastSyncHash === currentHash &&
-          existingSync.syncStatus === "synced"
-        ) {
+        if (existingSync && existingSync.lastSyncHash === currentHash && existingSync.syncStatus === "synced") {
           return { ok: true, action: "skipped_identical", externalEventId: existingSync.externalEventId };
         }
 
-        const providerEvent = shootToCalendarEvent(shoot);
-
-        if (existingSync && existingSync.externalEventId) {
-          // Update existing event on Google Calendar
-          const result = await provider.updateEvent(
-            conn.calendarId,
-            existingSync.externalEventId,
-            providerEvent
-          );
-
+        const providerEvent = shootToCalendarEvent(shoot, userId);
+        if (existingSync?.externalEventId) {
+          const result = await provider.updateEvent(targetCalId, existingSync.externalEventId, providerEvent);
           await calendarRepo.saveShootSync({
-            organizationId,
-            shootId,
-            externalCalendarId: conn.calendarId,
+            organizationId, userId, shootId,
+            externalCalendarId: targetCalId,
             externalEventId: result.externalEventId,
             externalEventEtag: result.etag,
+            externalEventUpdatedAt: result.updatedAt ?? new Date(),
             lastSyncHash: currentHash,
             syncStatus: "synced",
           });
-
+          await shootRepo.update(organizationId, shoot.id, {
+            sourceCalendarId: targetCalId,
+            externalEventId: result.externalEventId,
+          });
           return { ok: true, action: "updated", externalEventId: result.externalEventId };
         }
 
-        // Create new event on Google Calendar
-        const result = await provider.createEvent(conn.calendarId, providerEvent);
-
+        const result = await provider.createEvent(targetCalId, providerEvent);
         await calendarRepo.saveShootSync({
-          organizationId,
-          shootId,
-          externalCalendarId: conn.calendarId,
+          organizationId, userId, shootId,
+          externalCalendarId: targetCalId,
           externalEventId: result.externalEventId,
           externalEventEtag: result.etag,
+          externalEventUpdatedAt: result.updatedAt ?? new Date(),
           lastSyncHash: currentHash,
           syncStatus: "synced",
         });
-
+        await shootRepo.update(organizationId, shoot.id, {
+          sourceCalendarId: targetCalId,
+          externalEventId: result.externalEventId,
+        });
         return { ok: true, action: "created", externalEventId: result.externalEventId };
       } catch (err) {
         if (err instanceof GoogleAuthRevokedError) {
           await calendarRepo.updateConnectionStatus(
-            organizationId,
-            "revoked",
-            "Tài khoản Google đã hết hạn hoặc bị thu hồi quyền truy cập. Vui lòng kết nối lại."
+            organizationId, "revoked",
+            "Tài khoản Google đã hết hạn hoặc bị thu hồi quyền truy cập. Vui lòng kết nối lại.",
+            "primary", userId
           );
           return { ok: false, error: "AUTH_REVOKED", message: err.message };
         }
-
         const errorMsg = (err as Error).message || "Provider synchronization error.";
-        await calendarRepo.updateSyncCursor(organizationId, null, "error", errorMsg);
+        await calendarRepo.updateSyncCursor(organizationId, null, "error", errorMsg, "primary", userId);
         return { ok: false, error: "PROVIDER_ERROR", message: errorMsg };
       }
     },
 
-    /**
-     * Pulls event changes from Google Calendar back into G.Lab.
-     * Reconciles conflicts according to the explicit rules:
-     * - G.Lab is source-of-truth for crew/gear/checklists
-     * - Last-write-wins for timing & title
-     * - Deletions in Google mark G.Lab shoot as 'cancelled'
-     * - Unmatched Google events create new 'planned' shoots without duplicating
-     */
     async pullChangesFromGoogle(
       organizationId: string,
-      calendarId = "primary"
+      userId: string
     ): Promise<{ ok: boolean; pulledCount: number; error?: string }> {
       try {
-        const conn = await calendarRepo.getConnection(organizationId, calendarId);
+        const conn = await calendarRepo.getUserConnection(organizationId, userId);
         if (!conn || conn.status !== "connected" || !conn.syncEnabled || !conn.syncFromGoogle) {
           return { ok: true, pulledCount: 0 };
         }
 
-        const provider = getProviderClient(conn);
-        const { changes, nextSyncToken } = await provider.pullChanges(
-          conn.calendarId,
-          conn.nextSyncToken
-        );
-
-        let pulledCount = 0;
+        const calId = "primary";
+        const provider = getProviderClient(conn, userId);
+        const { changes, nextSyncToken } = await provider.pullChanges(calId, conn.nextSyncToken);
+        let totalPulled = 0;
 
         for (const change of changes) {
+          if (await calendarRepo.isExcludedEvent(organizationId, userId, change.externalEventId, calId)) continue;
           const existingSync = await calendarRepo.getSyncByExternalId(
-            organizationId,
-            change.externalEventId
+            organizationId, change.externalEventId, "google", userId
           );
 
           if (change.eventType === "deleted") {
-            if (existingSync) {
-              const shoot = await shootRepo.findById(organizationId, existingSync.shootId);
-              if (shoot && shoot.status !== "cancelled") {
-                // Rule 3: External cancellation updates G.Lab status to 'cancelled'
-                await shootRepo.update(organizationId, shoot.id, {
-                  status: "cancelled",
-                });
-                await calendarRepo.saveShootSync({
-                  organizationId,
-                  shootId: shoot.id,
-                  externalCalendarId: conn.calendarId,
-                  externalEventId: change.externalEventId,
-                  syncStatus: "cancelled",
-                });
-                pulledCount++;
-              }
+            if (!existingSync) continue;
+            const shoot = await shootRepo.findById(organizationId, existingSync.shootId);
+            if (!shoot) continue;
+            if (shoot.syncPolicy !== "google" || shoot.isTestData) {
+              await calendarRepo.saveShootSync({
+                organizationId, userId, shootId: shoot.id,
+                externalCalendarId: calId,
+                externalEventId: change.externalEventId,
+                externalEventEtag: change.etag,
+                externalEventUpdatedAt: change.updatedAt ?? null,
+                syncStatus: "unlinked",
+              });
+              continue;
+            }
+            if (shoot.status !== "cancelled") {
+              await shootRepo.update(organizationId, shoot.id, { status: "cancelled" });
+              await calendarRepo.saveShootSync({
+                organizationId, userId, shootId: shoot.id,
+                externalCalendarId: calId,
+                externalEventId: change.externalEventId,
+                externalEventEtag: change.etag,
+                externalEventUpdatedAt: change.updatedAt ?? null,
+                syncStatus: "cancelled",
+              });
+              totalPulled++;
             }
             continue;
           }
 
           if (!change.event) continue;
-
           const event = change.event;
-          if (event.providerEventType === "birthday") continue;
+          if (event.providerEventType === "birthday") {
+            await calendarRepo.saveExcludedEvent(organizationId, userId, change.externalEventId, "birthday", calId);
+            continue;
+          }
+
           const startsAt = new Date(event.start.dateTime);
           const endsAt = new Date(event.end.dateTime);
 
           if (existingSync) {
-            // Reconcile existing shoot
             const shoot = await shootRepo.findById(organizationId, existingSync.shootId);
-            if (shoot) {
-              // Rule 2: Last-write-wins timing reconciliation
-              const externalUpdated = change.updatedAt?.getTime() ?? 0;
-              const localUpdated = new Date(shoot.updatedAt).getTime();
-
-              if (externalUpdated >= localUpdated) {
-                const updatedShoot = await shootRepo.update(organizationId, shoot.id, {
-                  title: event.summary,
-                  startsAt,
-                  endsAt,
-                  locationName: event.location ?? shoot.locationName,
-                  notes: event.description ?? shoot.notes,
-                });
-
-                if (updatedShoot) {
-                  await calendarRepo.saveShootSync({
-                    organizationId,
-                    shootId: shoot.id,
-                    externalCalendarId: conn.calendarId,
-                    externalEventId: change.externalEventId,
-                    externalEventEtag: change.etag,
-                    lastSyncHash: computeShootSyncHash(updatedShoot),
-                    syncStatus: "synced",
-                  });
-                  pulledCount++;
-                }
-              }
-            }
-          } else {
-            // Rule 4: New external Google event imported as planned shoot
-            // Check if private properties contain glabShootId to prevent duplicate creation
-            const existingShootId = event.extendedProperties?.private?.glabShootId;
-            let targetShoot: Shoot | null = null;
-
-            if (existingShootId) {
-              targetShoot = await shootRepo.findById(organizationId, existingShootId);
-            }
-
-            if (targetShoot) {
-              await calendarRepo.saveShootSync({
-                organizationId,
-                shootId: targetShoot.id,
-                externalCalendarId: conn.calendarId,
-                externalEventId: change.externalEventId,
-                externalEventEtag: change.etag,
-                lastSyncHash: computeShootSyncHash(targetShoot),
-                syncStatus: "synced",
-              });
-            } else {
-              const newShoot = await shootRepo.create({
-                organizationId,
-                title: event.summary || "Lịch quay từ Google Calendar",
-                status: "planned",
+            if (!shoot || shoot.syncPolicy !== "google" || shoot.isTestData) continue;
+            const externalUpdated = change.updatedAt?.getTime() ?? 0;
+            const localUpdated = new Date(shoot.updatedAt).getTime();
+            if (externalUpdated >= localUpdated) {
+              const updatedShoot = await shootRepo.update(organizationId, shoot.id, {
+                title: event.summary,
                 startsAt,
                 endsAt,
-                locationName: event.location ?? null,
-                notes: event.description ?? null,
-              });
-
-              await calendarRepo.saveShootSync({
-                organizationId,
-                shootId: newShoot.id,
-                externalCalendarId: conn.calendarId,
+                locationName: event.location ?? shoot.locationName,
+                notes: event.description ?? shoot.notes,
+                sourceCalendarId: calId,
                 externalEventId: change.externalEventId,
-                externalEventEtag: change.etag,
-                lastSyncHash: computeShootSyncHash(newShoot),
-                syncStatus: "synced",
               });
-              pulledCount++;
+              if (updatedShoot) {
+                await calendarRepo.saveShootSync({
+                  organizationId, userId, shootId: shoot.id,
+                  externalCalendarId: calId,
+                  externalEventId: change.externalEventId,
+                  externalEventEtag: change.etag,
+                  externalEventUpdatedAt: change.updatedAt ?? null,
+                  lastSyncHash: computeShootSyncHash(updatedShoot),
+                  syncStatus: "synced",
+                });
+                totalPulled++;
+              }
             }
+            continue;
           }
+
+          const privateProps = event.extendedProperties?.private;
+          const existingShootId = privateProps?.glabShootId;
+          const glabUserId = privateProps?.glabUserId;
+          if (privateProps?.glabManaged === "true" && glabUserId && glabUserId !== userId) {
+            continue;
+          }
+          let targetShoot: Shoot | null = null;
+          if (existingShootId && (!glabUserId || glabUserId === userId)) {
+            targetShoot = await shootRepo.findById(organizationId, existingShootId);
+          }
+
+          if (targetShoot) {
+            await calendarRepo.saveShootSync({
+              organizationId, userId, shootId: targetShoot.id,
+              externalCalendarId: calId,
+              externalEventId: change.externalEventId,
+              externalEventEtag: change.etag,
+              externalEventUpdatedAt: change.updatedAt ?? null,
+              lastSyncHash: computeShootSyncHash(targetShoot),
+              syncStatus: "synced",
+            });
+            await shootRepo.update(organizationId, targetShoot.id, {
+              sourceCalendarId: calId,
+              externalEventId: change.externalEventId,
+            });
+            continue;
+          }
+
+          const newShoot = await shootRepo.create({
+            organizationId,
+            createdBy: userId,
+            title: event.summary || "Lịch quay từ Google Calendar",
+            status: "planned",
+            startsAt, endsAt,
+            locationName: event.location ?? null,
+            notes: event.description ?? null,
+            syncPolicy: "google",
+            isTestData: false,
+            sourceCalendarId: calId,
+            externalEventId: change.externalEventId,
+          });
+          await calendarRepo.saveShootSync({
+            organizationId, userId, shootId: newShoot.id,
+            externalCalendarId: calId,
+            externalEventId: change.externalEventId,
+            externalEventEtag: change.etag,
+            externalEventUpdatedAt: change.updatedAt ?? null,
+            lastSyncHash: computeShootSyncHash(newShoot),
+            syncStatus: "synced",
+          });
+          totalPulled++;
         }
 
-        // Persist sync cursor safely
-        await calendarRepo.updateSyncCursor(
-          organizationId,
-          nextSyncToken ?? conn.nextSyncToken,
-          "success",
-          `Đã đồng bộ thành công lúc ${new Date().toLocaleTimeString("vi-VN")}.`
-        );
-
-        return { ok: true, pulledCount };
+        if (nextSyncToken) {
+          await calendarRepo.updateSyncCursor(
+            organizationId, nextSyncToken, "success",
+            "Đã đồng bộ thành công lúc " + new Date().toLocaleTimeString("vi-VN") + ".",
+            "primary", userId
+          );
+        }
+        return { ok: true, pulledCount: totalPulled };
       } catch (err) {
         if (err instanceof GoogleAuthRevokedError) {
           await calendarRepo.updateConnectionStatus(
-            organizationId,
-            "revoked",
-            "Tài khoản Google đã hết hạn hoặc bị thu hồi quyền truy cập. Vui lòng kết nối lại."
+            organizationId, "revoked",
+            "Tài khoản Google đã hết hạn hoặc bị thu hồi quyền truy cập. Vui lòng kết nối lại.",
+            "primary", userId
           );
           return { ok: false, pulledCount: 0, error: "AUTH_REVOKED" };
         }
-
         const errorMsg = (err as Error).message || "Provider pull error.";
-        await calendarRepo.updateSyncCursor(organizationId, null, "error", errorMsg);
+        await calendarRepo.updateSyncCursor(organizationId, null, "error", errorMsg, "primary", userId);
         return { ok: false, pulledCount: 0, error: errorMsg };
       }
     },
 
-    /**
-     * Executes bidirectional synchronization for all shoots.
-     * Retries and duplicate sync calls are completely safe and idempotent.
-     */
-    async syncAll(organizationId: string, calendarId = "primary"): Promise<SyncAllResult> {
+    async syncAll(organizationId: string, userId: string): Promise<SyncAllResult> {
       try {
-        const conn = await calendarRepo.getConnection(organizationId, calendarId);
+        const conn = await calendarRepo.getUserConnection(organizationId, userId);
         if (!conn) {
           return { ok: false, pushedCount: 0, pulledCount: 0, message: "Google Calendar chưa được kết nối." };
         }
-
         if (conn.status === "revoked") {
           return {
-            ok: false,
-            pushedCount: 0,
-            pulledCount: 0,
-            error: "AUTH_REVOKED",
+            ok: false, pushedCount: 0, pulledCount: 0, error: "AUTH_REVOKED",
             message: "Tài khoản Google đã hết hạn hoặc bị thu hồi quyền truy cập. Vui lòng kết nối lại.",
           };
         }
 
         let pushedCount = 0;
-
-        // 1. Push shoots to Google if enabled
         if (conn.syncEnabled && conn.syncToGoogle) {
           const allShoots = await shootRepo.list(organizationId);
-          for (const shoot of allShoots) {
-            const pushResult = await this.syncShootToGoogle(organizationId, shoot.id, calendarId);
-            if (pushResult.ok && (pushResult.action === "created" || pushResult.action === "updated")) {
-              pushedCount++;
-            }
+          const exportableShoots = allShoots.filter(
+            (shoot) => shoot.syncPolicy === "google" && !shoot.isTestData
+          );
+          for (const shoot of exportableShoots) {
+            const pushResult = await this.syncShootToGoogle(organizationId, userId, shoot.id);
+            if (pushResult.ok && (pushResult.action === "created" || pushResult.action === "updated")) pushedCount++;
           }
         }
 
-        // 2. Pull changes from Google if enabled
         let pulledCount = 0;
         if (conn.syncEnabled && conn.syncFromGoogle) {
-          const pullResult = await this.pullChangesFromGoogle(organizationId, calendarId);
+          const pullResult = await this.pullChangesFromGoogle(organizationId, userId);
           pulledCount = pullResult.pulledCount;
         }
 
-        const latestConn = await calendarRepo.getConnection(organizationId, calendarId);
+        const latestConn = await calendarRepo.getUserConnection(organizationId, userId);
         await calendarRepo.updateSyncCursor(
           organizationId,
           latestConn?.nextSyncToken ?? conn.nextSyncToken,
           "success",
-          `Đã đồng bộ xong (${pushedCount} xuất, ${pulledCount} nhập) lúc ${new Date().toLocaleTimeString("vi-VN")}.`
+          "Đã đồng bộ xong (" + pushedCount + " xuất, " + pulledCount + " nhập) lúc " + new Date().toLocaleTimeString("vi-VN") + ".",
+          "primary",
+          userId
         );
-
-        return {
-          ok: true,
-          pushedCount,
-          pulledCount,
-          message: "Đồng bộ Google Calendar hoàn tất thành công.",
-        };
+        return { ok: true, pushedCount, pulledCount, message: "Đồng bộ Google Calendar hoàn tất thành công." };
       } catch (err) {
         if (err instanceof GoogleAuthRevokedError) {
           await calendarRepo.updateConnectionStatus(
-            organizationId,
-            "revoked",
-            "Tài khoản Google đã hết hạn hoặc bị thu hồi quyền truy cập. Vui lòng kết nối lại."
+            organizationId, "revoked",
+            "Tài khoản Google đã hết hạn hoặc bị thu hồi quyền truy cập. Vui lòng kết nối lại.",
+            "primary", userId
           );
           return {
-            ok: false,
-            pushedCount: 0,
-            pulledCount: 0,
-            error: "AUTH_REVOKED",
+            ok: false, pushedCount: 0, pulledCount: 0, error: "AUTH_REVOKED",
             message: "Tài khoản Google đã hết hạn hoặc bị thu hồi quyền truy cập. Vui lòng kết nối lại.",
           };
         }
-
         const errorMsg = (err as Error).message || "Synchronization failure.";
-        await calendarRepo.updateConnectionStatus(organizationId, "error", errorMsg);
+        await calendarRepo.updateConnectionStatus(organizationId, "error", errorMsg, "primary", userId);
         return {
-          ok: false,
-          pushedCount: 0,
-          pulledCount: 0,
-          error: errorMsg,
-          message: `Đồng bộ thất bại: ${errorMsg}`,
+          ok: false, pushedCount: 0, pulledCount: 0, error: errorMsg,
+          message: "Đồng bộ thất bại: " + errorMsg,
         };
       }
     },

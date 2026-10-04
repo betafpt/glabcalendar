@@ -13,7 +13,9 @@ export function createCrewAssignmentRepository(database: Database) {
           assignment: shootCrewAssignments,
           crewMember: {
             id: crewMembers.id,
+            userId: crewMembers.userId,
             name: crewMembers.name,
+            email: crewMembers.email,
             defaultRole: crewMembers.defaultRole,
             status: crewMembers.status,
           },

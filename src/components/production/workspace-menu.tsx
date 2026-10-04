@@ -3,8 +3,10 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { logoutAction } from "@/app/login/actions";
+import { clearClientDataOnSignOut } from "@/lib/client-cleanup";
 import { LocalizedText } from "@/components/ui/localized-text";
 import { Setting2, LogoutCurve } from "@/components/ui/iconsax";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 
 export function WorkspaceMenu({ className = "" }: { className?: string }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -29,15 +31,17 @@ export function WorkspaceMenu({ className = "" }: { className?: string }) {
   }, [isOpen]);
 
   return (
-    <div ref={menuRef} className={`relative inline-block ${className}`}>
-      <button
-        type="button"
-        aria-label="Cài đặt & Tài khoản"
-        onClick={() => setIsOpen((prev) => !prev)}
-        className="grid size-11 cursor-pointer place-items-center rounded-full border border-stroke/70 bg-surface text-ink shadow-soft transition hover:bg-white active:scale-press select-none"
-      >
-        <Setting2 size={18} variant="Linear" />
-      </button>
+    <div className={`flex items-center gap-2 ${className}`}>
+      <NotificationBell />
+      <div ref={menuRef} className="relative inline-block">
+        <button
+          type="button"
+          aria-label="Cài đặt & Tài khoản"
+          onClick={() => setIsOpen((prev) => !prev)}
+          className="grid size-11 cursor-pointer place-items-center rounded-full border border-stroke/70 bg-surface text-ink shadow-soft transition hover:bg-white active:scale-press select-none"
+        >
+          <Setting2 size={18} variant="Linear" />
+        </button>
 
       {isOpen && (
         <div className="absolute right-0 top-14 z-50 w-52 rounded-r22 border border-stroke bg-surface p-2 shadow-nav">
@@ -50,7 +54,12 @@ export function WorkspaceMenu({ className = "" }: { className?: string }) {
             <LocalizedText vi="Cài đặt" en="Settings" />
           </Link>
           <div className="mt-1 border-t border-stroke/70 pt-1">
-            <form action={logoutAction}>
+            <form
+              action={async () => {
+                await clearClientDataOnSignOut();
+                await logoutAction();
+              }}
+            >
               <button
                 type="submit"
                 className="flex w-full min-h-11 items-center gap-2.5 rounded-r16 px-3 text-xs font-black uppercase tracking-wider text-error transition hover:bg-error/10 active:scale-press"
@@ -62,6 +71,7 @@ export function WorkspaceMenu({ className = "" }: { className?: string }) {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

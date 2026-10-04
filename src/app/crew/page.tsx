@@ -7,7 +7,7 @@ import { LocalizedText } from "@/components/ui/localized-text";
 import { Calendar, Add, ArrowRight2, Profile2User } from "@/components/ui/iconsax";
 import { calendarRange } from "@/lib/calendar-range";
 import { errorMessage } from "@/lib/error-message";
-import { getInitialOrganization } from "@/server/organization-context";
+import { requireWorkspaceContext } from "@/server/workspace-context";
 import { CrewForm } from "./crew-form";
 import { WorkspaceMenu } from "@/components/production/workspace-menu";
 import { ModalPopover } from "@/components/ui/modal-popover";
@@ -47,7 +47,7 @@ async function load(): Promise<{
       import("@/server/db/crew-assignments"),
     ]);
 
-    const organization = await getInitialOrganization();
+    const { organization } = await requireWorkspaceContext();
 
     const range = calendarRange("day", new Date(), organization.timezone);
     const [crew, todayShoots, assignments] = await Promise.all([

@@ -44,4 +44,7 @@ export {
   TaskSquare,
   Refresh2,
   Setting2,
+  Warning2,
+  Buildings,
+  Trash,
 } from "iconsax-react";

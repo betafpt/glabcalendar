@@ -9,7 +9,7 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { Clock, Location, ArrowRight2, VideoPlay, Calendar } from "@/components/ui/iconsax";
 import { getServerConfig } from "@/lib/config";
 import { errorMessage } from "@/lib/error-message";
-import { getInitialOrganization } from "@/server/organization-context";
+import { requireWorkspaceContext } from "@/server/workspace-context";
 import { ShootCreateForm } from "./shoot-create-form";
 import { WorkspaceMenu } from "@/components/production/workspace-menu";
 
@@ -23,20 +23,40 @@ type ShootSummary = {
   startsAt: Date;
   endsAt: Date;
   locationName: string | null;
+  syncPolicy?: string;
+  isTestData?: boolean;
 };
 
 type ProjectOption = { id: string; name: string };
 
-async function loadData(): Promise<{ shoots: ShootSummary[]; projects: ProjectOption[]; error?: string }> {
+function dateKey(date: Date, timezone: string) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function formatShootRange(startsAt: Date, endsAt: Date, timezone: string) {
+  const crossesDay = dateKey(startsAt, timezone) !== dateKey(endsAt, timezone);
+  const time = (date: Date) => new Intl.DateTimeFormat("vi-VN", { timeZone: timezone, hour: "2-digit", minute: "2-digit" }).format(date);
+  const day = (date: Date) => new Intl.DateTimeFormat("vi-VN", { timeZone: timezone, day: "2-digit", month: "2-digit" }).format(date);
+
+  return crossesDay
+    ? `${day(startsAt)} · ${time(startsAt)} → ${day(endsAt)} · ${time(endsAt)}`
+    : new Intl.DateTimeFormat("vi-VN", { timeZone: timezone, dateStyle: "medium", timeStyle: "short" }).format(startsAt);
+}
+async function loadData(includeTestData = false): Promise<{ shoots: ShootSummary[]; projects: ProjectOption[]; error?: string }> {
   try {
     const [{ db }, { createShootRepository }, { createProjectRepository }] = await Promise.all([
       import("@/server/db"),
       import("@/server/db/shoots"),
       import("@/server/db/projects"),
     ]);
-    const organization = await getInitialOrganization();
+    const { organization } = await requireWorkspaceContext();
     const [shoots, projects] = await Promise.all([
-      createShootRepository(db).listSummaries(organization.id),
+      createShootRepository(db).listSummaries(organization.id, { includeTestData }),
       createProjectRepository(db).listOptions(organization.id),
     ]);
     return { shoots, projects };
@@ -48,20 +68,31 @@ async function loadData(): Promise<{ shoots: ShootSummary[]; projects: ProjectOp
 export default async function ShootsPage({
   searchParams,
 }: {
-  searchParams?: { status?: string; projectId?: string };
+  searchParams?: { status?: string; projectId?: string; includeTestData?: string };
 }) {
   const timezone = getServerConfig().appTimezone;
-  const { shoots, projects, error } = await loadData();
+  const includeTestData = searchParams?.includeTestData === "true" || searchParams?.includeTestData === "1";
+  const { shoots, projects, error } = await loadData(includeTestData);
   const projectNames = new Map(projects.map((project) => [project.id, project.name]));
 
   const statusFilter = searchParams?.status || "all";
   const projectFilter = searchParams?.projectId;
 
-  const filteredShoots = shoots.filter((shoot) => {
-    if (projectFilter && shoot.projectId !== projectFilter) return false;
-    if (statusFilter === "all") return true;
-    return shoot.status.toLowerCase() === statusFilter.toLowerCase();
-  });
+  const filteredShoots = shoots
+    .filter((shoot) => {
+      if (projectFilter && shoot.projectId !== projectFilter) return false;
+      if (statusFilter === "all") return true;
+      return shoot.status.toLowerCase() === statusFilter.toLowerCase();
+    })
+    .map((shoot) => {
+      let displayTitle = shoot.title;
+      if (shoot.isTestData) {
+        displayTitle = `[TEST] ${shoot.title}`;
+      } else if (shoot.syncPolicy === "excluded") {
+        displayTitle = `[LOẠI TRỪ] ${shoot.title}`;
+      }
+      return { ...shoot, title: displayTitle };
+    });
 
   const now = new Date();
 
@@ -109,28 +140,52 @@ export default async function ShootsPage({
           <span className="rounded-pill bg-ink px-3 py-1.5 text-[10px] font-black text-white">{filteredShoots.length} <LocalizedText vi="BUỔI QUAY" en="SHOOTS" /></span>
         </div>
 
-        <div className="mt-4 flex gap-2 overflow-x-auto pb-1 text-[12px] font-bold [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {filterTabs.map((tab) => {
-            const isActive = statusFilter === tab.id;
-            const queryUrl = new URLSearchParams();
-            if (tab.id !== "all") queryUrl.set("status", tab.id);
-            if (projectFilter) queryUrl.set("projectId", projectFilter);
-            const href = queryUrl.toString() ? `/shoots?${queryUrl.toString()}` : "/shoots";
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex gap-2 overflow-x-auto pb-1 text-[12px] font-bold [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {filterTabs.map((tab) => {
+              const isActive = statusFilter === tab.id;
+              const queryUrl = new URLSearchParams();
+              if (tab.id !== "all") queryUrl.set("status", tab.id);
+              if (projectFilter) queryUrl.set("projectId", projectFilter);
+              if (includeTestData) queryUrl.set("includeTestData", "true");
+              const href = queryUrl.toString() ? `/shoots?${queryUrl.toString()}` : "/shoots";
+
+              return (
+                <Link
+                  key={tab.id}
+                  href={href}
+                  className={`shrink-0 rounded-pill px-4 py-2.5 text-xs font-black transition duration-fast active:scale-press ${
+                    isActive
+                      ? "bg-ink text-white shadow-soft"
+                      : "border border-stroke/70 bg-surface text-ink shadow-soft hover:border-ink/20 hover:bg-white"
+                  }`}
+                >
+                  <LocalizedText vi={tab.vi} en={tab.en} />
+                </Link>
+              );
+            })}
+          </div>
+
+          {(() => {
+            const toggleParams = new URLSearchParams();
+            if (statusFilter !== "all") toggleParams.set("status", statusFilter);
+            if (projectFilter) toggleParams.set("projectId", projectFilter);
+            if (!includeTestData) toggleParams.set("includeTestData", "true");
+            const toggleHref = toggleParams.toString() ? `/shoots?${toggleParams.toString()}` : "/shoots";
 
             return (
               <Link
-                key={tab.id}
-                href={href}
-                className={`shrink-0 rounded-pill px-4 py-2.5 text-xs font-black transition duration-fast active:scale-press ${
-                  isActive
-                    ? "bg-ink text-white shadow-soft"
-                    : "border border-stroke/70 bg-surface text-ink shadow-soft hover:border-ink/20 hover:bg-white"
+                href={toggleHref}
+                className={`inline-flex items-center gap-2 rounded-pill px-3.5 py-1.5 text-[11px] font-bold transition active:scale-press ${
+                  includeTestData
+                    ? "bg-pink text-white shadow-soft font-black"
+                    : "border border-stroke bg-white text-secondary hover:text-ink"
                 }`}
               >
-                <LocalizedText vi={tab.vi} en={tab.en} />
+                <span>{includeTestData ? "✓ Đang hiện dữ liệu test" : "Hiện dữ liệu test / đã loại trừ"}</span>
               </Link>
             );
-          })}
+          })()}
         </div>
 
         {error ? <DatabaseErrorBanner error={error} className="mt-4" /> : null}
@@ -140,6 +195,7 @@ export default async function ShootsPage({
             <Link
               key={shoot.id}
               href={`/shoots/${shoot.id}`}
+              prefetch={true}
               className={`group rounded-r28 border border-ink/5 p-4 transition duration-base active:scale-[.99] sm:p-5 ${["bg-coral", "bg-lilac", "bg-mint", "bg-sky", "bg-yellow"][index % 5]} ${shoot.status === "completed" || shoot.endsAt.getTime() < now.getTime() ? "opacity-45 grayscale-[35%]" : ""}`}
             >
               <div className="flex items-start justify-between gap-3">
@@ -150,7 +206,7 @@ export default async function ShootsPage({
                 <StatusChip tone={shoot.status === "confirmed" ? "success" : shoot.status === "cancelled" ? "error" : "neutral"}><StatusText status={shoot.status} /></StatusChip>
               </div>
               <div className="mt-5 grid gap-2 border-t border-ink/10 pt-4 text-xs font-bold text-secondary sm:grid-cols-2">
-                <p className="flex items-center gap-1.5"><Clock size={14} variant="Linear" className="shrink-0 text-secondary" /> <LocalizedDateTime value={shoot.startsAt.toISOString()} options={{ dateStyle: "medium", timeStyle: "short", timeZone: timezone }} /></p>
+                <p className="flex items-center gap-1.5"><Clock size={14} variant="Linear" className="shrink-0 text-secondary" /> <span>{formatShootRange(shoot.startsAt, shoot.endsAt, timezone)}</span></p>
                 <p className="flex items-center gap-1.5"><Location size={14} variant="Linear" className="shrink-0 text-secondary" /> <span>{shoot.locationName || <LocalizedText vi="CHƯA CÓ ĐỊA ĐIỂM" en="LOCATION TBD" />}</span></p>
               </div>
               <div className="mt-4 flex justify-end"><span className="grid size-9 place-items-center rounded-full bg-surface/80 text-ink shadow-xs transition group-hover:translate-x-0.5"><ArrowRight2 size={16} variant="Linear" /></span></div>

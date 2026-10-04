@@ -8,6 +8,7 @@ export const filtersSchema = z.object({
   projectId: filterIdSchema.optional(),
   crewMemberId: filterIdSchema.optional(),
   equipmentItemId: filterIdSchema.optional(),
+  includeTestData: z.boolean().optional(),
 });
 
 export interface CalendarRepositoryPort {
@@ -27,6 +28,9 @@ export function createCalendarService(repository: CalendarRepositoryPort) {
         if (c.success) sanitized.crewMemberId = c.data;
         const e = filterIdSchema.safeParse(typeof raw.equipmentItemId === "string" ? raw.equipmentItemId.trim() : raw.equipmentItemId);
         if (e.success) sanitized.equipmentItemId = e.data;
+        if (raw.includeTestData === true || raw.includeTestData === "true" || raw.includeTestData === "1") {
+          sanitized.includeTestData = true;
+        }
       }
       return repository.listRange(organizationId, start, end, sanitized);
     },

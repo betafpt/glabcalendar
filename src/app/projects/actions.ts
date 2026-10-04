@@ -16,21 +16,19 @@ export type ProjectActionState = {
 };
 
 async function getProjectContext() {
-  const [{ db }, { createOrganizationRepository }, { createProjectRepository }, { createProjectService }] =
+  const [{ db }, { requireWorkspaceContext }, { createProjectRepository }, { createProjectService }] =
     await Promise.all([
       import("@/server/db"),
-      import("@/server/db/organizations"),
+      import("@/server/workspace-context"),
       import("@/server/db/projects"),
       import("@/server/services/projects"),
     ]);
 
-  const organization = await createOrganizationRepository(db).getOrCreateInitial({
-    name: "G.Lab Studio",
-    timezone: getServerConfig().appTimezone,
-  });
+  const { organization, membership } = await requireWorkspaceContext();
 
   return {
     organization,
+    membership,
     service: createProjectService(createProjectRepository(db)),
   };
 }

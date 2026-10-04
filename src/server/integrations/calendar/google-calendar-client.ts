@@ -10,6 +10,7 @@ import {
   GoogleApiError,
   GoogleAuthRevokedError,
 } from "./types";
+import { classifyGoogleCalendarSource } from "./google-calendar-sources";
 
 export interface GoogleOAuthOptions {
   clientId?: string;
@@ -312,7 +313,7 @@ export class GoogleCalendarClient implements CalendarProvider {
   async createEvent(
     calendarId: string,
     event: CalendarProviderEvent
-  ): Promise<{ externalEventId: string; etag?: string }> {
+  ): Promise<{ externalEventId: string; etag?: string; updatedAt?: Date }> {
     const encodedCalendarId = encodeURIComponent(calendarId);
     const body = {
       summary: event.summary,
@@ -324,7 +325,7 @@ export class GoogleCalendarClient implements CalendarProvider {
       extendedProperties: event.extendedProperties,
     };
 
-    const data = await this.request<{ id: string; etag?: string }>(
+    const data = await this.request<{ id: string; etag?: string; updated?: string }>(
       `/calendars/${encodedCalendarId}/events`,
       {
         method: "POST",
@@ -336,6 +337,7 @@ export class GoogleCalendarClient implements CalendarProvider {
     return {
       externalEventId: data.id,
       etag: data.etag,
+      updatedAt: data.updated ? new Date(data.updated) : undefined,
     };
   }
 
@@ -343,7 +345,7 @@ export class GoogleCalendarClient implements CalendarProvider {
     calendarId: string,
     externalEventId: string,
     event: CalendarProviderEvent
-  ): Promise<{ externalEventId: string; etag?: string }> {
+  ): Promise<{ externalEventId: string; etag?: string; updatedAt?: Date }> {
     const encodedCalendarId = encodeURIComponent(calendarId);
     const encodedEventId = encodeURIComponent(externalEventId);
 
@@ -357,7 +359,7 @@ export class GoogleCalendarClient implements CalendarProvider {
       extendedProperties: event.extendedProperties,
     };
 
-    const data = await this.request<{ id: string; etag?: string }>(
+    const data = await this.request<{ id: string; etag?: string; updated?: string }>(
       `/calendars/${encodedCalendarId}/events/${encodedEventId}`,
       {
         method: "PUT",
@@ -369,6 +371,7 @@ export class GoogleCalendarClient implements CalendarProvider {
     return {
       externalEventId: data.id,
       etag: data.etag,
+      updatedAt: data.updated ? new Date(data.updated) : undefined,
     };
   }
 
@@ -472,14 +475,27 @@ export class GoogleCalendarClient implements CalendarProvider {
         summary: string;
         primary?: boolean;
         timeZone?: string;
+        description?: string;
+        summaryOverride?: string;
+        accessRole?: "freeBusyReader" | "reader" | "writer" | "owner";
+        selected?: boolean;
+        hidden?: boolean;
       }>;
     }>("/users/me/calendarList");
 
-    return (data.items ?? []).map((item) => ({
-      id: item.id,
-      summary: item.summary,
-      primary: Boolean(item.primary),
-      timeZone: item.timeZone,
-    }));
+    return (data.items ?? []).map((item) => {
+      const calendar: CalendarInfo = {
+        id: item.id,
+        summary: item.summary,
+        primary: Boolean(item.primary),
+        timeZone: item.timeZone,
+        description: item.description,
+        summaryOverride: item.summaryOverride,
+        accessRole: item.accessRole,
+        selected: item.selected,
+        hidden: item.hidden,
+      };
+      return { ...calendar, sourceType: classifyGoogleCalendarSource(calendar) };
+    });
   }
 }

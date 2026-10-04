@@ -5,10 +5,10 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { LocalizedText } from "@/components/ui/localized-text";
 import { LocalizedDateTime } from "@/components/ui/localized-date-time";
 import { StatusText } from "@/components/ui/status-text";
-import { VideoSquare, TickCircle, Clock, ArrowRight2, Folder2 } from "@/components/ui/iconsax";
+import { Calendar, Add, VideoSquare, TickCircle, Clock, ArrowRight2, Folder2, User } from "@/components/ui/iconsax";
 import { errorMessage } from "@/lib/error-message";
 import type { Project } from "@/server/db/schema";
-import { getInitialOrganization } from "@/server/organization-context";
+import { requireWorkspaceContext } from "@/server/workspace-context";
 import { ProjectCreateForm } from "./project-create-form";
 import { WorkspaceMenu } from "@/components/production/workspace-menu";
 import { ModalPopover } from "@/components/ui/modal-popover";
@@ -31,7 +31,7 @@ async function loadProjects(): Promise<{
       import("@/server/db/shoots"),
     ]);
 
-    const organization = await getInitialOrganization();
+    const { organization } = await requireWorkspaceContext();
 
     const [projects, shootStatuses] = await Promise.all([
       createProjectRepository(db).list(organization.id),
@@ -93,14 +93,14 @@ export default async function ProjectsPage({
             href="/calendar"
             className="grid size-11 place-items-center rounded-full border border-stroke/70 bg-surface text-ink shadow-soft transition hover:border-ink/20 hover:bg-white active:scale-press"
           >
-            📅
+            <Calendar size={18} variant="Linear" />
             <span className="sr-only"><LocalizedText vi="Xem lịch" en="View calendar" /></span>
           </Link>
           <ModalPopover
             triggerAriaLabel="Create project"
             trigger={
-              <span className="grid size-11 place-items-center rounded-full bg-ink text-2xl font-light text-white shadow-soft transition duration-fast hover:bg-pink active:scale-press select-none">
-                +
+              <span className="grid size-11 place-items-center rounded-full bg-ink text-white shadow-soft transition duration-fast hover:bg-pink active:scale-press select-none">
+                <Add size={20} variant="Linear" />
                 <span className="sr-only"><LocalizedText vi="Tạo dự án" en="Create project" /></span>
               </span>
             }
@@ -198,12 +198,14 @@ export default async function ProjectsPage({
                 </div>
 
                 <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] sm:text-[12px] font-bold text-secondary">
-                  <span className="truncate">
-                    ⌖ {project.clientName || <LocalizedText vi="Dự án nội bộ" en="Internal project" />}
+                  <span className="inline-flex items-center gap-1 truncate">
+                    <User size={13} variant="Linear" className="shrink-0 text-secondary/70" />
+                    {project.clientName || <LocalizedText vi="Dự án nội bộ" en="Internal project" />}
                   </span>
                   {project.startsOn ? (
-                    <span className="shrink-0 text-secondary/80">
-                      · ◷ {project.endsOn && project.endsOn !== project.startsOn ? `${project.startsOn} → ${project.endsOn}` : project.startsOn}
+                    <span className="inline-flex items-center gap-1 shrink-0 text-secondary/80">
+                      · <Calendar size={13} variant="Linear" className="shrink-0 text-secondary/70" />
+                      {project.endsOn && project.endsOn !== project.startsOn ? `${project.startsOn} → ${project.endsOn}` : project.startsOn}
                     </span>
                   ) : null}
                 </p>

@@ -9,7 +9,7 @@ import { DeleteEntityButton } from "@/components/ui/delete-entity-button";
 import { getServerConfig } from "@/lib/config";
 import { errorMessage } from "@/lib/error-message";
 import type { Project } from "@/server/db/schema";
-import { getInitialOrganization } from "@/server/organization-context";
+import { requireWorkspaceContext } from "@/server/workspace-context";
 import { ProjectEditForm } from "./project-edit-form";
 import { WorkspaceMenu } from "@/components/production/workspace-menu";
 import { deleteProjectAction } from "../actions";
@@ -31,7 +31,7 @@ async function loadProject(id: string): Promise<{ project: Project | null; shoot
       import("@/server/db/projects"),
       import("@/server/db/shoots"),
     ]);
-    const organization = await getInitialOrganization();
+    const { organization } = await requireWorkspaceContext();
     const [project, shoots] = await Promise.all([
       createProjectRepository(db).findById(organization.id, id),
       createShootRepository(db).listForProject(organization.id, id),

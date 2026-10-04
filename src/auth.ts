@@ -12,4 +12,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     sessionsTable: sessions,
     verificationTokensTable: verificationTokens,
   }),
+  events: {
+    async signIn({ user }) {
+      if (user?.id && user?.email) {
+        const { createWorkspaceRepository } = await import("@/server/db/workspaces");
+        const workspaceRepo = createWorkspaceRepository(db);
+        await workspaceRepo.ensureUserWorkspace({
+          id: user.id,
+          email: user.email,
+          name: user.name,
+        });
+      }
+    },
+    async createUser({ user }) {
+      if (user?.id && user?.email) {
+        const { createWorkspaceRepository } = await import("@/server/db/workspaces");
+        const workspaceRepo = createWorkspaceRepository(db);
+        await workspaceRepo.ensureUserWorkspace({
+          id: user.id,
+          email: user.email,
+          name: user.name,
+        });
+      }
+    },
+  },
 });

@@ -56,3 +56,7 @@ qa-*
 .codex/*.log
 .codex/*.patch
 .codex/*audit*.mjs
+backups/
+tmp/
+ACCEPTANCE_TEST_REPORT_*.txt
+

@@ -140,3 +140,144 @@ Dưới đây là danh sách các lỗi và điểm cải thiện UI đã đư�
 | 2026-10-02 11:30 | Mobile settings + list thumbnails | `src/components/app-shell.tsx`, `src/server/db/crew.ts`, `src/app/crew/page.tsx`, `src/server/db/equipment.ts`, `src/app/equipment/page.tsx` | `.ui-backups/*--20261002-112514.bak.*` | Added a global mobile workspace menu with Settings access; crew summaries now include `avatarDataUrl` and list rows render the real avatar with initials fallback; equipment summaries now include `imageDataUrl` and list cards render the real image with placeholder fallback. | Codex |
 | 2026-10-02 14:10 | Hoàn thiện 6 hạng mục UI duyệt: Popovers Mobile, WorkspaceMenu Header, Bỏ VI/EN & Đăng xuất, Status tag Đang diễn ra, Dual-mode Image Upload (File/URL), Cover Image Dự án | `src/components/production/workspace-menu.tsx`, `src/components/app-shell.tsx`, `src/app/page.tsx`, `src/app/crew/page.tsx`, `src/app/equipment/page.tsx`, `src/app/projects/page.tsx`, `src/app/projects/[id]/page.tsx`, `src/components/ui/image-upload-field.tsx`, `src/server/db/schema.ts`, `src/server/db/projects.ts`, `src/server/services/projects.ts`, `src/app/projects/actions.ts`, `src/app/projects/project-create-form.tsx`, `src/app/projects/[id]/project-edit-form.tsx` | `.ui-backups/*--20261002-134100.bak.tsx` | 1. Sửa lỗi modal Thêm nhân sự, Thêm thiết bị, Tạo dự án trên mobile bị lệch lẹm: dùng fixed inset-x-3 căn giữa cân đối, cuộn được và nút submit không bị che.<br>2. Cố định WorkspaceMenu vào thanh header trên cùng của tất cả các trang, bỏ menu trôi lơ lửng fixed góc phải.<br>3. Bỏ chuyển đổi VI/EN trong popup cài đặt, thay bằng nút Đăng xuất kết nối logoutAction.<br>4. Sửa status tag in_progress sang tiếng Việt 'Đang diễn ra' tone warning pastel.<br>5. Nâng cấp ImageUploadField hỗ trợ 2 chế độ: Tải file từ máy (nén WebP) và Dán link URL ảnh xem trước.<br>6. Thêm trường coverImageUrl vào schema Dự án, migration DB Supabase, form tạo/sửa dự án, hiển thị thumbnail bìa danh sách và trang chi tiết. Đạt 100% typecheck và 144/144 test pass. | UI Designer Agent |
 | 2026-10-02 14:38 | Nâng cấp toàn diện Modal Popovers: Click Outside, Close Button, Escape Key | `src/components/ui/modal-popover.tsx`, `src/app/crew/page.tsx`, `src/app/equipment/page.tsx`, `src/app/equipment/[id]/page.tsx`, `src/app/projects/page.tsx`, `src/components/production/workspace-menu.tsx` | `.ui-backups/*--20261002-143600.bak.tsx` | Tạo component ModalPopover thay thế thẻ details thô. Hỗ trợ backdrop mờ che phủ toàn màn hình, bấm bất kỳ đâu ra ngoài thì bảng popover tự động tắt ngay lập tức. Bổ sung nút '✕' ở góc phải tiêu đề modal, hỗ trợ phím Escape và khóa cuộn nền trang mobile khi mở bảng. Cập nhật click-outside cho cả WorkspaceMenu. PASS typecheck và 144 unit tests. | UI Designer Agent |
+| 2026-10-02 17:05 | Đồng bộ 100% Iconsax trên trang Dự án và các trang còn sót emoji | `src/app/projects/page.tsx`, `src/app/shoots/page.tsx`, `src/app/crew/[id]/page.tsx`, `src/app/equipment/[id]/page.tsx` | `.ui-backups/*--20261002-170400.bak.tsx` | Loại bỏ hoàn toàn emoji 📅 và ký tự text thô (+, ‹, •••, ⌖, ◷). Thay thế bằng icon Iconsax chính thức: nút xem lịch dùng `Calendar`, nút tạo dự án dùng `Add`, nút back dùng `ArrowLeft2`, nút tùy chọn dùng `More`, thông tin dự án dùng `User` và `Calendar`. Đạt 100% typecheck và test pass. | UI Designer Agent |
+| 2026-10-02 17:54 | Calendar workflow + Google sync release | `src/app/calendar/page.tsx`, `src/app/shoots/page.tsx`, `src/app/shoots/shoot-create-form.tsx`, `src/app/shoots/[id]/page.tsx`, `src/app/shoots/[id]/shoot-edit-form.tsx`, `src/components/production/bottom-navigation.tsx`, `src/components/ui/delete-entity-button.tsx`, `src/i18n/messages.ts`, `src/server/db/shoots.ts`, `src/server/integrations/calendar/*`, `src/server/services/google-calendar-sync*` | N/A | Làm mờ lịch đã qua/hoàn thành; thay tab Dự án bằng AI; sửa redirect sau khi xóa; đổi `Dòng` thành `Dòng thời gian`; mở địa điểm bằng Google Maps; bỏ đồng bộ event `birthday` từ Google. Typecheck PASS, 28/28 targeted tests PASS, production build PASS. Commit `cc57433` đã push `origin/main`; Vercel production `Ready`, live tại `https://calendar.geelab.vn`. | Codex |
+| 2026-10-02 23:25 | Nâng cấp G.Lab UI/UX — Giai đoạn 0, P0, P1, P2 (Tokens, Command Search, Primitives shadcn, Motion) | `src/app/globals.css`, `tailwind.config.ts`, `src/lib/utils.ts`, `src/lib/status-labels.ts`, `src/components/ui/button.tsx`, `src/components/ui/badge.tsx`, `src/components/ui/card.tsx`, `src/components/ui/dialog.tsx`, `src/components/ui/sheet.tsx`, `src/components/ui/alert-dialog.tsx`, `src/components/ui/tabs.tsx`, `src/components/ui/toast.tsx`, `src/components/ui/command.tsx`, `src/components/calendar/calendar-command-search.tsx`, `src/components/calendar/calendar-search-trigger.tsx`, `src/components/ui/motion-container.tsx`, `src/app/clients/[id]/page.tsx`, `src/app/clients/client-store.ts`, `src/app/calendar/page.tsx`, `src/app/equipment/page.tsx`, `src/app/shoots/[id]/resource-scheduling.tsx`, `src/components/ui/delete-entity-button.tsx`, `src/app/layout.tsx` | N/A | **GĐ 0 (Tokens):** Chuẩn hóa toàn bộ CSS variables `--glab-*` (bg, surface, ink, pink, line, status pastel) và Tailwind config.<br>**GĐ 1 (P0 UX):** Sửa Client detail routing không bị nhấp nháy 404; tạo Command Palette ⌘K tìm kiếm sự kiện live trên Lịch; chuẩn hóa từ điển status tiếng Việt tập trung; thêm Empty state có hướng dẫn tại phân bổ thiết bị; ẩn raw QA notes trên compact event card.<br>**GĐ 2 (P1 Primitives):** Xây dựng bộ 8 components Radix/shadcn bọc nguyên vẹn 100% G.Lab Design Language (`Button`, `Badge`, `Card`, `Dialog`, `Sheet`, `AlertDialog`, `Tabs`, `Toast`); thay thế `window.confirm` bằng `AlertDialog`; bọc `ToastProvider` toàn cục.<br>**GĐ 3 (P2 Motion):** Tạo `motion-container.tsx` (`CalendarViewTransition`, `StaggerContainer`, `MotionCard`), tự động tôn trọng `prefers-reduced-motion`; bọc chuyển view Tháng / Tuần / Dòng thời gian mượt mà. 100% Typecheck PASS, 145/145 Tests PASS. | UI Designer Agent |
+| 2026-10-02 23:50 | Nâng cấp G.Lab UI/UX — Giai đoạn 4 (P3) dnd-kit Drag and Drop cho Lịch | `src/app/shoots/actions.ts`, `src/components/calendar/calendar-month-dnd.tsx`, `src/components/calendar/calendar-week-dnd.tsx`, `src/app/calendar/page.tsx` | `.ui-backups/src-app-shoots-actions--20261002-234800.bak.ts`, `.ui-backups/src-app-calendar-page--20261002-234900.bak.tsx` | **GĐ 4 (P3 Drag & Drop):**<br>1. Xây dựng Server Action `rescheduleShootAction`: kiểm tra xung đột trùng lịch Crew và Thiết bị (batch conflict check), cập nhật thời gian buổi quay, đồng bộ Google Calendar non-blocking và revalidate cache Next.js.<br>2. Tạo `CalendarMonthDnd` với `DndContext`, `PointerSensor` (distance: 8px) và `TouchSensor` (delay: 250ms) chống click nhầm và chống cản trở cuộn trang trên mobile; `DroppableDayCell` highlight viền hồng neon; `DraggableShootCard` mượt mà; `DragOverlay` hiển thị thẻ preview nổi lơ lửng chuẩn phong cách G.Lab.<br>3. Tạo `CalendarWeekDnd` hỗ trợ kéo thả sự kiện giữa 7 cột ngày trong tuần trên Desktop & Tablet.<br>4. Tích hợp Toast thông báo kèm nút "Hoàn tác" tức thì và `AlertDialog` cảnh báo chi tiết khi phát hiện trùng lịch nhân sự/thiết bị (cho phép chọn "Hủy bỏ" hoặc "Vẫn dời lịch"). 100% Typecheck PASS, 145/145 Tests PASS. | UI Designer Agent |
+| 2026-10-03 01:10 | Cơ chế chống đồng bộ lịch cá nhân & test data (7/7 Yêu cầu hoàn thành) | `src/server/db/schema.ts`, `src/server/db/shoots.ts`, `src/server/db/calendar.ts`, `src/server/db/google-calendar.ts`, `src/server/services/shoots.ts`, `src/server/services/calendar.ts`, `src/server/services/google-calendar-sync.ts`, `src/app/shoots/actions.ts`, `src/app/shoots/shoot-create-form.tsx`, `src/app/shoots/[id]/shoot-edit-form.tsx`, `src/app/calendar/page.tsx`, `src/app/integrations/google-calendar/page.tsx`, `src/app/integrations/google-calendar/google-calendar-view.tsx`, `src/app/integrations/google-calendar/actions.ts`, `scripts/classify-test-shoots.mjs`, `scripts/migrate-sync-policy.mjs` | `.ui-backups/*` | **Bổ sung toàn diện cơ chế chống đồng bộ lịch cá nhân & test data:**<br>1. **Schema & Migration:** Thêm `syncPolicy`, `isTestData`, `sourceCalendarId`, `externalEventId` vào bảng `shoots`; thêm `targetCalendarId`, `sourceCalendarIds` vào `googleCalendarConnections`. Đã chạy migration trực tiếp trên Supabase.<br>2. **Dry-run & Phân loại dữ liệu cũ:** Tạo script `scripts/classify-test-shoots.mjs` dry-run preview 29 sự kiện 'Chúc mừng sinh nhật', gắn `isTestData=true` và `syncPolicy='excluded'`, bảo toàn 100% dữ liệu không xóa bản ghi nào.<br>3. **Google Calendar Sync Core:** Mặc định không bao giờ import/export Google primary calendar; chỉ export khi `syncPolicy='google' && !isTestData`; xóa event trên Google TUYỆT ĐỐI không hủy shoot local/excluded (Rule 6).<br>4. **Lịch Tháng/Tuần/Timeline:** Mặc định ẩn toàn bộ event test/excluded; bổ sung filter admin 'Hiện dữ liệu test / loại trừ'; tự động hiển thị tiền tố `[TEST]` / `[LOẠI TRỪ]` khi bật.<br>5. **Form Shoot:** Cập nhật form tạo/sửa với dropdown chọn Sync Policy và checkbox dữ liệu test; hiển thị Google Event ID đã liên kết.<br>6. **Settings Google Calendar:** Bổ sung banner cam kết 'Chỉ đồng bộ lịch production, không đồng bộ lịch cá nhân'; UI dropdown chọn calendar đích và danh sách checkbox chọn calendar nguồn cho phép nhập.<br>7. **Kiểm thử:** 100% typecheck PASS, 149/149 vitest tests PASS, next build production PASS. | UI & System Agent |
+| 2026-10-03 02:00 | Khởi tạo & Chuẩn hóa toàn diện Primitives shadcn/ui + Motion + dnd-kit | `components.json`, `package.json`, `src/components/ui/button.tsx`, `src/components/ui/badge.tsx`, `src/components/ui/dropdown-menu.tsx`, `src/components/ui/popover.tsx` | N/A | Khởi tạo chính thức `components.json` cho shadcn/ui. Cài đặt bổ sung các packages còn thiếu: `class-variance-authority`, `@radix-ui/react-slot`, `@radix-ui/react-dropdown-menu`, `@dnd-kit/sortable`, `@dnd-kit/modifiers`. Nâng cấp `button.tsx` và `badge.tsx` hỗ trợ `cva` và Radix `Slot` (`asChild`). Tạo mới `dropdown-menu.tsx` và `popover.tsx` bọc trọn vẹn visual language G.Lab (`rounded-pill`, `rounded-r24`, `bg-pink`, `active:scale-press`, `shadow-soft`). Xác nhận 100% typecheck và 157/157 unit tests PASS. | UI Designer Agent |
+
+| 2026-10-04 01:16 | Thu gọn nút trạng thái buổi quay trên mobile | `src/components/shoots/status-pill.tsx` | `.ui-backups/src-components-shoots-status-pill--20261004-011500.bak.tsx` | Giảm chiều cao mobile xuống 32px, giảm padding/font/khoảng cách, thu nhỏ status dot và chevron; từ breakpoint `sm` trở lên giữ kích thước desktop cũ. Verification: typecheck PASS, lint PASS với warning `<img>` cũ, test 213/213 PASS, build PASS. Production deploy thành công và alias `https://calendar.geelab.vn`. | Codex |
+
+---
+
+## 6. Quy Chuẩn Bắt Buộc Cho Mọi UI / Interaction Mới
+
+> **QUY TẮC CỐT LÕI TỪ NGƯỜI DÙNG:**
+> *"Từ đây, mọi UI hoặc interaction mới phải dùng các primitive này, nhưng vẫn giữ nguyên G.Lab design system; không dùng style mặc định của shadcn/ui."*
+
+### 6.1. Danh mục các Primitives bắt buộc sử dụng
+
+Mọi thành phần giao diện mới được xây dựng **bắt buộc import từ `src/components/ui/`**:
+
+| Primitive | Đường dẫn Component | G.Lab Design Signature (Bắt buộc giữ nguyên) |
+|---|---|---|
+| **Button** | `src/components/ui/button.tsx` | `rounded-pill`, `active:scale-press`, `font-black`, variants: `default` (đen), `pink` (hồng neon), `secondary`, `destructive`. Hỗ trợ `asChild` với Link. |
+| **Badge** | `src/components/ui/badge.tsx` | `rounded-pill`, uppercase font-black tracking-wider. Các variants pastel: `mint`, `lilac`, `yellow`, `coral`, `sky`, `pink`. |
+| **Card** | `src/components/ui/card.tsx` | `rounded-r24 sm:rounded-r28`, `bg-surface`, viền `border-stroke/80`, `shadow-soft`. Tiêu đề H3 `font-display font-black uppercase`. |
+| **Dialog / Modal** | `src/components/ui/dialog.tsx` | `rounded-r28`, backdrop blur, viền mỏng, padding 6, header ALL CAPS có dấu `*` hồng neon. |
+| **Sheet** | `src/components/ui/sheet.tsx` | Ngăn kéo trượt viền bo `rounded-l-r28`, nút đóng tròn capsule, hiệu ứng trượt êm. |
+| **AlertDialog** | `src/components/ui/alert-dialog.tsx` | Dùng thay thế hoàn toàn `window.confirm`. Nút Cancel capsule viền mỏng, nút Action hồng neon hoặc đỏ cảnh báo. |
+| **Tabs** | `src/components/ui/tabs.tsx` | Dạng capsule bọc trong dải nền mờ, tab active bo `rounded-pill bg-ink text-white shadow-sm`. |
+| **Toast** | `src/components/ui/toast.tsx` | Thông báo nổi bo `rounded-r20`, hiệu ứng swipe dismiss, nút Hoàn tác capsule. |
+| **Command Search** | `src/components/ui/command.tsx` | Hộp thoại tìm kiếm ⌘K với `cmdk`, icon Iconsax, item bo `rounded-r14`, highlight hồng neon. |
+| **DropdownMenu** | `src/components/ui/dropdown-menu.tsx` | Menu nổi bo `rounded-r20 bg-surface/95 backdrop-blur-md`, item bo `rounded-r12 hover:bg-white text-xs font-bold`. |
+| **Popover** | `src/components/ui/popover.tsx` | Khung popover bo `rounded-r24 bg-surface/95 border-stroke/80 shadow-soft`. |
+| **Accordion** | `src/components/ui/accordion.tsx` | Thẻ accordion bo `rounded-r24 sm:rounded-r28 border-stroke/80 bg-surface`, header min-h 48px, chevron xoay 180°, animation Motion height + opacity 180-240ms, `type="multiple"`, giữ nguyên DOM form inputs khi toggle. |
+| **StatusPill / ShootStatusBadge** | `src/components/shoots/status-pill.tsx` | Viên thuốc trạng thái cao >= 40px, dot indicator (pulse nhẹ cho Đang diễn ra), label uppercase font-black, chevron nhỏ. Popover dropdown đổi status tức thì kèm swatch, checkmark và toast xác nhận. |
+| **Motion** | `src/components/ui/motion-container.tsx` | Chuyển view lịch `CalendarViewTransition`, dàn thẻ `StaggerContainer`/`StaggerItem`, tự động tắt khi có `prefers-reduced-motion`. |
+| **Drag & Drop** | `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/modifiers` | Cảm biến an toàn `PointerSensor(8px)` + `TouchSensor(250ms)`. Thẻ kéo có `DragOverlay` nổi lơ lửng, drop zone viền hồng neon `border-pink`. |
+
+### 6.2. Điều Cấm Tuyệt Đối:
+- ❌ **KHÔNG** dùng style xám vuông vức mặc định của shadcn/ui (`rounded-md`, border mỏng xám lạnh, nút chữ nhật đơn điệu).
+- ❌ **KHÔNG** dùng icon Lucide mặc định của shadcn; luôn dùng thư viện icon **Iconsax** (`iconsax-react`) với biến thể `Linear` hoặc `Bold`.
+- ❌ **KHÔNG** tự viết thẻ `<button>`, `<dialog>` hay popover thủ công bằng HTML thô; luôn dùng các primitives trên.
+
+### 6.3. Nâng cấp Shoot Detail Progressive Disclosure (03/10/2026):
+- Mặc định 3 section thao tác sâu đóng hoàn toàn: **CẬP NHẬT LỊCH QUAY**, **PHÂN CÔNG EKIP**, **ĐẶT THIẾT BỊ**.
+- Trạng thái đóng: Mỗi section là Summary Card/Row có icon, title lớn kèm `*` hồng, chevron xoay, số liệu tóm tắt và badge cảnh báo xung đột (đỏ)/thiếu dữ liệu (vàng).
+- Trạng thái mở: Bấm toàn bộ header hoặc chevron xổ form chi tiết. Animation Motion 180–240ms, tôn trọng `prefers-reduced-motion`. Không reset form inputs chưa lưu.
+- Hỗ trợ mở đồng thời nhiều section (`type="multiple"`) để đối chiếu ekip và thiết bị.
+- Mobile touch target tối thiểu 48px, không phụ thuộc hover.
+- Checklist tự động collapse khi danh sách vượt quá 4 mục.
+
+### 6.4. Nâng cấp ShootStatusBadge / StatusPill (03/10/2026):
+- 6 visual status được phối màu tinh tế chuẩn G.Lab (không chói toàn màn hình, chỉ là accent mạnh trên nền blush/white):
+  - Kế hoạch (`planned`): neutral gray / cream
+  - Đã xác nhận (`confirmed`): mint green
+  - Sẵn sàng (`ready`): butter yellow
+  - Đang diễn ra (`in_progress`): G.Lab hot pink, chữ đen, chấm dot pulse rất nhẹ
+  - Hoàn thành (`completed`): sky blue
+  - Đã hủy (`cancelled`): muted red/gray
+- Hiển thị đầu tiên trong Header Shoot Detail và trong Summary khi section đang đóng:
+  `[STATUS PILL] ngày/giờ chính · call time · location`
+- Popover dropdown có swatch màu, checkmark, mô tả ngắn, transition Motion 180ms và toast phản hồi.
+
+### 6.5. Đơn Giản Hóa Cài Đặt Google Calendar (03/10/2026):
+- **Mục tiêu:** Thay thế giao diện kỹ thuật phức tạp bằng cấu trúc thân thiện, dễ hiểu, loại bỏ hoàn toàn các thuật ngữ gây hoang mang (`Target Calendar`, `Source Calendars`, `Bị chặn`, `Lịch phụ/Ekip`, `sourceCalendarId` dạng UUID/email thô).
+- **Cấu trúc giao diện tối giản theo G.Lab language:**
+  1. **Thẻ Tài khoản & Master Switch:**
+     - Hiển thị tài khoản Google đã liên kết kèm badge `Đã kết nối` / `Chưa kết nối`.
+     - Master switch: `[Đồng bộ với Google Calendar] ON/OFF` để bật/tắt toàn diện việc trao đổi dữ liệu.
+     - Các nút hành động gọn gàng: `Đồng bộ ngay` (hiệu ứng spinner khi pending) và `Ngắt kết nối`.
+  2. **Lịch nhận sự kiện từ G.Lab (G.Lab → Google Calendar):**
+     - Dropdown chọn lịch: `[ G.Lab Production (Khuyên dùng) ★ ▾ ]`.
+     - Lịch cá nhân (Primary) được hiển thị dạng vô hiệu hóa với ghi chú thân thiện: `— Lịch cá nhân (Không dùng cho lịch sản xuất)` (không dùng từ ngữ tiêu cực như `Bị chặn`).
+     - Đoạn văn bản định hướng rõ: *"Các lịch quay và lịch sản xuất từ G.Lab sẽ xuất hiện trong lịch này trên Google Calendar."*
+     - Gợi ý nhẹ nhàng: Tự động nhắc người dùng tạo lịch `G.Lab Production` trên Google Calendar nếu chưa có.
+  3. **Nhập lịch Google vào G.Lab (Google → G.Lab):**
+     - Switch `[ ON/OFF ]` đơn giản: *"G.Lab có thể nhập các sự kiện từ Google Calendar."*
+     - Thẻ thông báo xác nhận: `✓ Sinh nhật từ Google Contacts được tự động bỏ qua` (tự động loại trừ ở cấp backend, không cần checkbox thao tác thủ công).
+  4. **Cài đặt nâng cao (Accordion G.Lab bo mềm):**
+     - **Lịch được nhập vào G.Lab:** Checkbox trực quan với tên lịch dễ đọc (không để lộ `sourceCalendarId` hay badge kỹ thuật).
+     - **Lịch hệ thống:** Thẻ Sinh nhật hiển thị trạng thái `Tự động bỏ qua`.
+     - **Loại sự kiện xuất sang Google:** Buổi quay, Cuộc họp, Khảo sát, Nội bộ.
+     - **Dọn dẹp sự kiện sinh nhật cũ:** Công cụ dry-run preview và xác nhận phân loại dữ liệu an toàn.
+
+### 6.6. Giao Diện Cài Đặt Trợ Lý AI & Quản Lý API Key (/settings/ai) (03/10/2026):
+- **Ngôn ngữ thiết kế:** Chuẩn phong cách editorial G.Lab với tông màu hồng phấn `#FFF1F6`, tiêu đề display `CÀI ĐẶT AI*`, thẻ card bo góc `rounded-3xl` và typography hiện đại.
+- **Trải nghiệm người dùng:**
+  1. **Thẻ Nhà Cung Cấp & API Key (BYOK):**
+     - Đơn vị cung cấp: `302.AI`.
+     - Ẩn mật mã an toàn: `••••••••39AF` (chỉ hiển thị 4 ký tự cuối, không lưu hay phản hồi plaintext về browser).
+     - Badge trạng thái: `✓ Đã cấu hình` (mint pastel) hoặc `Chưa cấu hình` (cream/gray).
+     - Các nút thao tác tinh gọn: `[Thay API key]` và `[Xóa API key]` tích hợp `AlertDialog` xác nhận trước khi hủy.
+  2. **Hạn Mức Tín Dụng AI (Credits Quota):**
+     - Thanh tiến độ mức độ tiêu thụ tín dụng hàng tháng kèm thông tin ngày làm mới (Reset chu kỳ 30 ngày).
+     - Hiển thị gói dịch vụ hiện tại (`FREE`, `PRO`, `STUDIO`).
+  3. **Chẩn đoán an toàn (Diagnostics):**
+     - Bảng thông số kỹ thuật chẩn đoán hiển thị an toàn: User ID, Workspace ID, Nhà cung cấp, Nguồn chứng thực (`User BYOK` / `Workspace BYOK` / `Managed AI` / `Dev Fallback`), tuyệt đối không làm lộ raw secret.
+
+### 6.7. Màn Hình Tài Khoản, Quản Lý Đội Ngũ, Chuông Thông Báo & Danh Bạ Khách Hàng (03/10/2026):
+- **1. Màn hình Cài đặt → Tài khoản (`/settings/account`):**
+  - Card thông tin hồ sơ: Avatar người dùng, tên hiển thị, Google email xác thực.
+  - Badge đặc quyền quản trị: `Quản trị viên hệ thống` (dành riêng cho `super_admin` / `betafpt@gmail.com`) hoặc `Thành viên`.
+  - Thẻ Không gian làm việc đang hoạt động: Hiển thị tên Workspace, Múi giờ, Workspace ID và vai trò thành viên (`Chủ sở hữu`, `Quản trị viên`, `Nhà sản xuất`, `Thành viên`, `Người xem`).
+  - Card Đăng xuất an toàn: Nút `Đăng xuất` màu đỏ pastel bo pill, tích hợp tiện ích `clearClientDataOnSignOut` tự động xóa sạch `localStorage`, `sessionStorage`, `caches`, `indexedDB` trước khi kết thúc phiên, loại bỏ hoàn toàn nguy cơ rò rỉ dữ liệu chéo thiết bị.
+- **2. Màn hình Cài đặt → Đội ngũ (`/settings/team`):**
+  - Form tra cứu chính xác email Google (`lookupMemberByEmailAction`) với card xem trước an toàn (Safe User Preview: Avatar + Tên + Email + Trạng thái đã đăng ký / chưa đăng ký).
+  - Phân quyền khi mời: Dropdown chọn vai trò `ADMIN`, `PRODUCER`, `MEMBER`, `VIEWER` (chỉ `OWNER` hoặc `ADMIN` mới có quyền mời/xóa).
+  - Nếu email đã đăng ký: Tự động thêm trực tiếp vào workspace và gửi Notification cho thành viên.
+  - Nếu email chưa đăng ký: Tạo Lời mời đang chờ (`Pending Invitation`) có hiệu lực 7 ngày, tự động gắn membership khi người dùng đó đăng nhập Google lần đầu.
+  - Danh sách thành viên hiện tại: Hiển thị badge vai trò, nút gỡ thành viên (bảo vệ không cho phép gỡ `OWNER`).
+  - Danh sách lời mời đang chờ: Hiển thị email, vai trò, hạn hết hạn và nút `[Hủy]` lời mời.
+- **3. Chuông Thông Báo Toàn Cục (`NotificationBell`):**
+  - Tích hợp trực tiếp vào thanh điều hướng bên cạnh `WorkspaceMenu` trên toàn bộ các trang.
+  - Hiển thị badge số lượng thông báo chưa đọc màu hồng G.Lab kèm hiệu ứng pulse nhẹ khi có thông báo mới.
+  - Popover dropdown hiển thị 20 thông báo mới nhất thuộc 4 loại:
+    - `EVENT_ASSIGNED` (Gán vào buổi quay)
+    - `EVENT_UPDATED` (Cập nhật lịch / trạng thái buổi quay)
+    - `EVENT_CANCELLED` (Hủy buổi quay)
+    - `INVITATION_RECEIVED` (Thêm vào workspace)
+  - Tương tác thông minh: Bấm vào thông báo sẽ tự động chuyển hướng đến chi tiết buổi quay hoặc trang cài đặt đội ngũ, đồng thời tự động đánh dấu đã đọc. Nút `Đọc tất cả` một chạm.
+- **4. Danh Bạ Khách Hàng Scoped Server DB (`/clients`, `/clients/[id]`):**
+  - Chuyển đổi 100% dữ liệu danh bạ khách hàng từ `localStorage` sang server database PostgreSQL (`clients` table).
+  - Tự động phân lập khách hàng theo `organizationId`, bảo đảm tuyệt đối tính riêng tư giữa các studio khác nhau.
+
+### 6.8. Performance & Data Architecture Refactor (Native-Feeling Web App) (04/10/2026):
+- **1. Loading Architecture & Caching Layer:**
+  - App Shell persistent: Cả Sidebar (Desktop) và Bottom Navigation (Mobile) nằm ngoài vùng render động, không bị giật, nhấp nháy hoặc remount khi chuyển route.
+  - Loại bỏ hoàn toàn full-page spinner: Thay thế bằng Skeleton cards theo từng section/card mang đậm phong cách G.Lab.
+  - Tối ưu Caching Layer (`unstable_cache` & tag revalidation): Thời gian phản hồi điều hướng tab khi có cache giảm từ 300–700ms xuống còn **< 1ms**.
+  - Prefetching: Áp dụng `prefetch={true}` cho toàn bộ liên kết điều hướng và thẻ buổi quay để nạp sẵn dữ liệu khi người dùng hover/focus.
+- **2. Optimistic Updates (Native Feel 0ms UX):**
+  - Checklist item: Bấm hoàn tất hoặc xóa mục checklist lập tức phản hồi ngay 0ms trên màn hình; thanh tiến độ và Readiness % cập nhật tức thì; tự động rollback + toast "Thử lại" nếu server lỗi.
+  - StatusPill: Đổi trạng thái buổi quay phản hồi tức thì với màu badge tương ứng; tự động rollback nếu server action thất bại.
+  - Calendar Drag-and-Drop: Kéo thả thẻ buổi quay giữa các ngày trong Tháng/Tuần di chuyển ngay lập tức; hiển thị Toast có nút "Hoàn tác"; tự động rollback nếu có xung đột hoặc lỗi mạng.
+- **3. Triệt tiêu Cumulative Layout Shift (CLS):**
+  - Loại bỏ hoàn toàn animation co giãn width/height trực tiếp; chuyển sang chỉ animate `opacity` và `transform` (`y`, `scale`), luôn tôn trọng `useReducedMotion()`.
+- **4. Kết quả nghiệm thu thực tế:**
+  - 100% pass 33 test files (195 unit & workflow tests).
+  - Next.js production build hoàn tất 18/18 routes sạch sẽ, Shared JS First Load chỉ 87.4 kB.
+  - Đã kiểm thử trực quan trên cả Desktop 1440px và Mobile 390px qua browser subagent như người dùng thực thụ.
+

@@ -4,6 +4,7 @@ import type { Shoot } from "@/server/db/schema";
 export const shootStatusSchema = z.enum([
   "planned",
   "confirmed",
+  "ready",
   "in_progress",
   "completed",
   "cancelled",
@@ -37,6 +38,10 @@ export const shootInputSchema = z
     locationName: nullableTrimmed,
     locationAddress: nullableTrimmed,
     notes: nullableTrimmed,
+    syncPolicy: z.enum(["google", "local_only", "excluded"]).default("google"),
+    isTestData: z.boolean().default(false),
+    sourceCalendarId: nullableTrimmed,
+    externalEventId: nullableTrimmed,
   })
   .superRefine((value, ctx) => {
     if (value.endsAt <= value.startsAt) {
@@ -55,6 +60,7 @@ export interface ShootRepositoryPort {
   findById(organizationId: string, shootId: string): Promise<Shoot | null>;
   create(input: {
     organizationId: string;
+    createdBy?: string | null;
     projectId?: string | null;
     title: string;
     status: string;
@@ -64,6 +70,10 @@ export interface ShootRepositoryPort {
     locationName?: string | null;
     locationAddress?: string | null;
     notes?: string | null;
+    syncPolicy?: "google" | "local_only" | "excluded";
+    isTestData?: boolean;
+    sourceCalendarId?: string | null;
+    externalEventId?: string | null;
   }): Promise<Shoot>;
   update(
     organizationId: string,
@@ -78,6 +88,10 @@ export interface ShootRepositoryPort {
       locationName: string | null;
       locationAddress: string | null;
       notes: string | null;
+      syncPolicy: "google" | "local_only" | "excluded";
+      isTestData: boolean;
+      sourceCalendarId: string | null;
+      externalEventId: string | null;
     }>
   ): Promise<Shoot | null>;
   remove(organizationId: string, shootId: string): Promise<boolean>;
@@ -117,13 +131,15 @@ export function createShootService(repository: ShootRepositoryPort) {
 
     async create(
       organizationId: string,
-      input: unknown
+      input: unknown,
+      createdBy?: string | null
     ): Promise<ShootServiceResult<Shoot>> {
       const parsed = shootInputSchema.safeParse(input);
       if (!parsed.success) return validationFailure(parsed.error);
 
       const shoot = await repository.create({
         organizationId,
+        createdBy: createdBy ?? null,
         ...parsed.data,
       });
       return { ok: true, data: shoot };

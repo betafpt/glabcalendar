@@ -8,8 +8,9 @@ import { Calendar, Category, Add, Location, Sun1, ArrowRight2 } from "@/componen
 import { DEFAULT_APP_TIMEZONE, getServerConfig } from "@/lib/config";
 import { errorMessage } from "@/lib/error-message";
 import type { TodayDashboardSummary } from "@/server/db/dashboard";
-import { getInitialOrganization } from "@/server/organization-context";
+import { requireWorkspaceContext } from "@/server/workspace-context";
 import { WorkspaceMenu } from "@/components/production/workspace-menu";
+import { OperationsStatus } from "@/components/dashboard/operations-status";
 
 export const dynamic = "force-dynamic";
 
@@ -23,15 +24,9 @@ async function loadToday(): Promise<TodayPageData> {
   let timezone = DEFAULT_APP_TIMEZONE;
   try {
     timezone = getServerConfig().appTimezone;
-    const [
-      { db },
-      { createDashboardRepository },
-    ] = await Promise.all([
-      import("@/server/db"),
-      import("@/server/db/dashboard"),
-    ]);
-    const organization = await getInitialOrganization();
-    const summary = await createDashboardRepository(db).getToday(
+    const { organization } = await requireWorkspaceContext();
+    const { getCachedDashboardToday } = await import("@/server/cached-loaders");
+    const summary = await getCachedDashboardToday(
       organization.id,
       organization.timezone
     );
@@ -63,17 +58,20 @@ async function loadToday(): Promise<TodayPageData> {
 
 function formatTime(date: Date | string, timeZone: string) {
   const d = date instanceof Date ? date : new Date(date);
+  const validDate = isNaN(d.getTime()) ? new Date() : d;
   return new Intl.DateTimeFormat("en", {
     timeZone,
     hour: "2-digit",
     minute: "2-digit",
-  }).format(d);
+  }).format(validDate);
 }
 
 function shootDuration(startsAt: Date | string, endsAt: Date | string) {
   const start = startsAt instanceof Date ? startsAt : new Date(startsAt);
   const end = endsAt instanceof Date ? endsAt : new Date(endsAt);
-  const durationMs = Math.max(0, end.getTime() - start.getTime());
+  const startTime = isNaN(start.getTime()) ? 0 : start.getTime();
+  const endTime = isNaN(end.getTime()) ? 0 : end.getTime();
+  const durationMs = Math.max(0, endTime - startTime);
   const totalMinutes = Math.round(durationMs / 60_000);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
@@ -82,33 +80,36 @@ function shootDuration(startsAt: Date | string, endsAt: Date | string) {
   return `${minutes}m`;
 }
 
-function formatDateLabels(anchor: Date, timeZone: string) {
+function formatDateLabels(anchor: Date | string, timeZone: string) {
+  const d = anchor instanceof Date ? anchor : new Date(anchor);
+  const validDate = isNaN(d.getTime()) ? new Date() : d;
+
   const enFull = new Intl.DateTimeFormat("en", {
     timeZone,
     weekday: "long",
     month: "long",
     day: "numeric",
-  }).format(anchor);
+  }).format(validDate);
 
   const viFullRaw = new Intl.DateTimeFormat("vi", {
     timeZone,
     weekday: "long",
     month: "long",
     day: "numeric",
-  }).format(anchor);
+  }).format(validDate);
   const viFull = viFullRaw.charAt(0).toUpperCase() + viFullRaw.slice(1);
 
   const monthShortEn = new Intl.DateTimeFormat("en", {
     timeZone,
     month: "short",
     year: "numeric",
-  }).format(anchor).toUpperCase();
+  }).format(validDate).toUpperCase();
 
   const monthShortVi = new Intl.DateTimeFormat("vi", {
     timeZone,
     month: "short",
     year: "numeric",
-  }).format(anchor).toUpperCase();
+  }).format(validDate).toUpperCase();
 
   return { enFull, viFull, monthShortEn, monthShortVi };
 }
@@ -151,24 +152,24 @@ export default async function TodayDashboard() {
         <div className="flex items-center gap-1.5 sm:gap-2">
           <Link
             href="/calendar"
-            aria-label="Calendar view"
             className="grid size-11 place-items-center rounded-full border border-stroke/70 bg-surface text-ink shadow-soft transition-all duration-fast hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 active:scale-press"
           >
             <Calendar size={18} variant="Linear" />
+            <span className="sr-only"><LocalizedText vi="Xem lịch" en="Calendar view" /></span>
           </Link>
           <Link
             href="/shoots"
-            aria-label="All shoots"
             className="grid size-11 place-items-center rounded-full border border-stroke/70 bg-surface text-ink shadow-soft transition-all duration-fast hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 active:scale-press"
           >
             <Category size={18} variant="Linear" />
+            <span className="sr-only"><LocalizedText vi="Tất cả buổi quay" en="All shoots" /></span>
           </Link>
           <Link
             href="/shoots"
-            aria-label="New shoot"
             className="group grid size-11 place-items-center rounded-full bg-ink text-white shadow-soft transition-all duration-fast hover:bg-pink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink focus-visible:ring-offset-2 active:scale-press"
           >
             <Add size={18} variant="Linear" />
+            <span className="sr-only"><LocalizedText vi="Tạo buổi quay mới" en="New shoot" /></span>
           </Link>
           <WorkspaceMenu />
         </div>
@@ -178,7 +179,7 @@ export default async function TodayDashboard() {
       <header className="mt-3 sm:mt-4 min-w-0">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div>
-            <h1 className="font-display text-[clamp(2.8rem,13vw,7rem)] font-black uppercase leading-[0.96] tracking-[-0.045em] text-ink sm:leading-[0.92]">
+            <h1 className="font-display text-[clamp(2.5rem,10vw,4.8rem)] font-black uppercase leading-[0.96] tracking-[-0.045em] text-ink sm:leading-[0.92]">
               <LocalizedText vi="Hôm nay" en="Today" />
               <span aria-hidden="true" className="text-pink">
                 *
@@ -225,6 +226,7 @@ export default async function TodayDashboard() {
       <section className="mt-6 grid grid-cols-2 gap-2.5 sm:gap-3.5 lg:grid-cols-4">
         <Link
           href="/shoots"
+          prefetch={true}
           className="group rounded-r22 border border-stroke/80 bg-surface/90 p-4 shadow-soft transition-all duration-base hover:-translate-y-0.5 hover:bg-white hover:border-ink/15 active:scale-press"
         >
           <div className="flex items-center justify-between">
@@ -243,6 +245,7 @@ export default async function TodayDashboard() {
 
         <Link
           href="/crew"
+          prefetch={true}
           className="group rounded-r22 border border-stroke/80 bg-surface/90 p-4 shadow-soft transition-all duration-base hover:-translate-y-0.5 hover:bg-white hover:border-ink/15 active:scale-press"
         >
           <div className="flex items-center justify-between">
@@ -271,6 +274,7 @@ export default async function TodayDashboard() {
 
         <Link
           href="/equipment"
+          prefetch={true}
           className="group rounded-r22 border border-stroke/80 bg-surface/90 p-4 shadow-soft transition-all duration-base hover:-translate-y-0.5 hover:bg-white hover:border-ink/15 active:scale-press"
         >
           <div className="flex items-center justify-between">
@@ -339,183 +343,18 @@ export default async function TodayDashboard() {
         </div>
       </section>
 
-      {/* Overall Readiness & Conflict Summary (M3-T07) */}
+      {/* Compact operations status */}
       {rows.length > 0 ? (
-        <section className="mt-6 rounded-r24 sm:rounded-r28 border border-stroke/80 bg-surface/90 p-5 sm:p-6 shadow-soft">
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-ink/10">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-pink">
-                <LocalizedText
-                  vi="TỔNG QUAN VẬN HÀNH"
-                  en="PRODUCTION READINESS SUMMARY"
-                />
-              </p>
-              <h2 className="mt-0.5 font-display text-xl sm:text-2xl font-black uppercase tracking-tight text-ink">
-                <LocalizedText
-                  vi="Mức độ sẵn sàng & xung đột hôm nay"
-                  en="Today's Readiness & Conflicts"
-                />
-              </h2>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {summary.totalConflicts > 0 ? (
-                <StatusChip tone="error">
-                  {summary.totalConflicts}{" "}
-                  <LocalizedText vi="xung đột cần xử lý" en="conflicts need attention" />
-                </StatusChip>
-              ) : summary.checklistTotal > 0 && summary.readinessPercent === 100 ? (
-                <StatusChip tone="success">
-                  <LocalizedText vi="100% Sẵn sàng" en="100% Ready" />
-                </StatusChip>
-              ) : (
-                <StatusChip tone={summary.readinessPercent >= 75 ? "mint" : "warning"}>
-                  <LocalizedText vi="Đang chuẩn bị" en="In preparation" />
-                </StatusChip>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-            {/* Checklist Readiness Card */}
-            <div className="rounded-r20 border border-stroke/70 bg-white/70 p-4 sm:p-5 shadow-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase tracking-wider text-secondary">
-                  <LocalizedText vi="Tiến độ chuẩn bị (Checklist)" en="Checklist Readiness" />
-                </span>
-                <span className="font-display text-2xl font-black tracking-tight text-ink">
-                  {summary.readinessPercent}%
-                </span>
-              </div>
-
-              <div className="mt-3">
-                <ProgressBar value={summary.readinessPercent} className="h-2.5" />
-              </div>
-
-              <div className="mt-3 flex items-center justify-between text-xs font-bold text-secondary">
-                <span>
-                  <LocalizedText
-                    vi={`${summary.checklistCompleted} / ${summary.checklistTotal} mục đã hoàn tất`}
-                    en={`${summary.checklistCompleted} of ${summary.checklistTotal} items completed`}
-                  />
-                </span>
-                <span>
-                  {summary.checklistTotal === 0 ? (
-                    <span className="text-secondary/70">
-                      <LocalizedText vi="Chưa có mục nào" en="No checklist items" />
-                    </span>
-                  ) : summary.checklistCompleted === summary.checklistTotal ? (
-                    <span className="text-success font-extrabold">
-                      ✓ <LocalizedText vi="Hoàn tất" en="All items ready" />
-                    </span>
-                  ) : (
-                    <span>
-                      <LocalizedText
-                        vi={`Còn ${summary.checklistTotal - summary.checklistCompleted} mục`}
-                        en={`${summary.checklistTotal - summary.checklistCompleted} remaining`}
-                      />
-                    </span>
-                  )}
-                </span>
-              </div>
-            </div>
-
-            {/* Conflict Breakdown Card */}
-            <div
-              className={`rounded-r20 border p-4 sm:p-5 shadow-xs transition-colors ${
-                summary.totalConflicts > 0
-                  ? "border-error/25 bg-error/[0.04]"
-                  : "border-stroke/70 bg-white/70"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase tracking-wider text-secondary">
-                  <LocalizedText vi="Phân bổ xung đột" en="Conflict Breakdown" />
-                </span>
-                {summary.totalConflicts > 0 ? (
-                  <span className="text-xs font-black text-error">
-                    {summary.shootsWithConflicts} / {summary.totalShoots}{" "}
-                    <LocalizedText vi="buổi quay bị ảnh hưởng" en="shoots affected" />
-                  </span>
-                ) : (
-                  <span className="text-xs font-black text-success">
-                    ✓ <LocalizedText vi="Không có xung đột" en="Zero conflicts" />
-                  </span>
-                )}
-              </div>
-
-              <div className="mt-3 grid grid-cols-2 gap-2.5">
-                {/* Crew conflicts detail */}
-                <div
-                  className={`rounded-r16 border p-3 ${
-                    summary.totalCrewConflicts > 0
-                      ? "border-error/30 bg-white text-ink"
-                      : "border-stroke/60 bg-surface/50 text-secondary"
-                  }`}
-                >
-                  <p className="text-[10px] font-black uppercase tracking-wider text-secondary">
-                    <LocalizedText vi="Xung đột nhân sự" en="Crew Conflicts" />
-                  </p>
-                  <p className="mt-1 font-display text-xl font-black text-ink">
-                    {summary.totalCrewConflicts}
-                  </p>
-                  <p className="mt-0.5 text-[10px] font-bold">
-                    {summary.totalCrewConflicts > 0 ? (
-                      <span className="text-error font-extrabold">
-                        <LocalizedText vi="Trùng lịch" en="Overlap" />
-                      </span>
-                    ) : (
-                      <span className="text-success font-extrabold">
-                        <LocalizedText vi="Không trùng" en="Clear" />
-                      </span>
-                    )}
-                  </p>
-                </div>
-
-                {/* Equipment conflicts detail */}
-                <div
-                  className={`rounded-r16 border p-3 ${
-                    summary.totalEquipmentConflicts > 0
-                      ? "border-error/30 bg-white text-ink"
-                      : "border-stroke/60 bg-surface/50 text-secondary"
-                  }`}
-                >
-                  <p className="text-[10px] font-black uppercase tracking-wider text-secondary">
-                    <LocalizedText vi="Xung đột thiết bị" en="Gear Conflicts" />
-                  </p>
-                  <p className="mt-1 font-display text-xl font-black text-ink">
-                    {summary.totalEquipmentConflicts}
-                  </p>
-                  <p className="mt-0.5 text-[10px] font-bold">
-                    {summary.totalEquipmentConflicts > 0 ? (
-                      <span className="text-error font-extrabold">
-                        <LocalizedText vi="Trùng lịch" en="Overlap" />
-                      </span>
-                    ) : (
-                      <span className="text-success font-extrabold">
-                        <LocalizedText vi="Không trùng" en="Clear" />
-                      </span>
-                    )}
-                  </p>
-                </div>
-              </div>
-
-              <p className="mt-2.5 text-[11px] font-medium text-secondary">
-                {summary.totalConflicts > 0 ? (
-                  <LocalizedText
-                    vi="Vui lòng kiểm tra các buổi quay bị đánh dấu để điều chỉnh nhân sự hoặc thiết bị phù hợp."
-                    en="Check flagged shoots below to resolve crew overlaps or reassign equipment."
-                  />
-                ) : (
-                  <LocalizedText
-                    vi="Tất cả nhân sự và thiết bị đã sẵn sàng, không phát hiện xung đột lịch trình."
-                    en="All crew and equipment are fully cleared with no schedule collisions detected."
-                  />
-                )}
-              </p>
-            </div>
-          </div>
-        </section>
+        <OperationsStatus
+          readinessPercent={summary.readinessPercent}
+          checklistCompleted={summary.checklistCompleted}
+          checklistTotal={summary.checklistTotal}
+          totalConflicts={summary.totalConflicts}
+          totalCrewConflicts={summary.totalCrewConflicts}
+          totalEquipmentConflicts={summary.totalEquipmentConflicts}
+          shootsWithConflicts={summary.shootsWithConflicts}
+          totalShoots={summary.totalShoots}
+        />
       ) : null}
 
       {/* Database Error Banner */}
@@ -534,6 +373,7 @@ export default async function TodayDashboard() {
           </div>
           <Link
             href="/calendar"
+            prefetch={true}
             className="inline-flex items-center gap-1 text-xs font-black text-secondary hover:text-ink transition-colors"
           >
             <LocalizedText vi="Xem trên lịch" en="View on calendar" /> →
@@ -568,6 +408,7 @@ export default async function TodayDashboard() {
               <Link
                 key={shoot.id}
                 href={`/shoots/${shoot.id}`}
+                prefetch={true}
                 className={`group grid gap-4 rounded-r24 sm:rounded-r28 border border-ink/8 p-4 sm:p-5 shadow-soft transition-all duration-base hover:-translate-y-0.5 hover:shadow-md hover:border-ink/15 sm:grid-cols-[120px_minmax(0,1fr)_auto] ${tone}`}
               >
                 {/* Time Column */}
@@ -581,11 +422,6 @@ export default async function TodayDashboard() {
                   <span className="mt-2 inline-flex items-center rounded-pill bg-white/70 px-2 py-0.5 text-[10px] font-extrabold text-ink/80 shadow-xs">
                     {shootDuration(shoot.startsAt, shoot.endsAt)}
                   </span>
-                  {shoot.callTime ? (
-                    <p className="mt-1.5 text-[10px] font-bold text-secondary">
-                      Call: {formatTime(shoot.callTime, timezone)}
-                    </p>
-                  ) : null}
                 </div>
 
                 {/* Main Details Column */}

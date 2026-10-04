@@ -46,6 +46,26 @@
   --color-error: #f0445e;
   --color-stroke: #eadde4;
 
+  /* G.Lab Canonical Standardized Tokens */
+  --glab-bg: #fff1f6;
+  --glab-surface: #fff9fb;
+  --glab-ink: #090909;
+  --glab-secondary: #5f5960;
+  --glab-pink: #ff4f9a;
+  --glab-line: #eadde4;
+
+  /* G.Lab Event Status Pastel Tokens */
+  --glab-status-confirmed-bg: #cff7e7;
+  --glab-status-confirmed-ink: #0d5f3f;
+  --glab-status-planned-bg: #ffe89a;
+  --glab-status-planned-ink: #7a5200;
+  --glab-status-in-progress-bg: #ffe89a;
+  --glab-status-in-progress-ink: #7a5200;
+  --glab-status-completed-bg: #e2e8f0;
+  --glab-status-completed-ink: #334155;
+  --glab-status-cancelled-bg: #ffc3d2;
+  --glab-status-cancelled-ink: #9b1c34;
+
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;

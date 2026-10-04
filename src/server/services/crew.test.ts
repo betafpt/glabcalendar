@@ -5,6 +5,7 @@ import { createCrewService, type CrewRepositoryPort } from "./crew";
 const crewMember: CrewMember = {
   id: "00000000-0000-0000-0000-000000000201",
   organizationId: "00000000-0000-0000-0000-000000000010",
+  userId: null,
   name: "An Nguyen",
   defaultRole: "DOP",
   phone: null,

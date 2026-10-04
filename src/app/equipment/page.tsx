@@ -5,10 +5,11 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { LocalizedText } from "@/components/ui/localized-text";
 import { Calendar, Add, ArrowRight2, Camera } from "@/components/ui/iconsax";
 import { errorMessage } from "@/lib/error-message";
-import { getInitialOrganization } from "@/server/organization-context";
+import { requireWorkspaceContext } from "@/server/workspace-context";
 import { EquipmentForm } from "./equipment-form";
 import { WorkspaceMenu } from "@/components/production/workspace-menu";
 import { ModalPopover } from "@/components/ui/modal-popover";
+import { StatusText } from "@/components/ui/status-text";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ async function load(): Promise<{ items: EquipmentSummary[]; error?: string }> {
       import("@/server/db"),
       import("@/server/db/equipment"),
     ]);
-    const organization = await getInitialOrganization();
+    const { organization } = await requireWorkspaceContext();
     return { items: await createEquipmentRepository(db).listSummaries(organization.id) };
   } catch (error) {
     return { items: [], error: errorMessage(error, "Unable to load equipment.") };
@@ -34,6 +35,15 @@ async function load(): Promise<{ items: EquipmentSummary[]; error?: string }> {
 }
 
 const sectionTones = ["bg-coral", "bg-lilac", "bg-mint", "bg-yellow", "bg-sky"];
+
+const categoryLabels: Record<string, { vi: string; en: string }> = {
+  Cameras: { vi: "Máy quay", en: "Cameras" },
+  Lenses: { vi: "Ống kính", en: "Lenses" },
+  Audio: { vi: "Âm thanh", en: "Audio" },
+  Lighting: { vi: "Ánh sáng", en: "Lighting" },
+  Support: { vi: "Thiết bị hỗ trợ", en: "Support" },
+  Other: { vi: "Khác", en: "Other" },
+};
 
 function normalizedCategory(value: string | null) {
   const category = value?.trim() || "Other";
@@ -77,7 +87,14 @@ export default async function EquipmentPage({
     year: "numeric",
   }).format(now).toUpperCase();
 
-  const filterCategories = ["All", "Cameras", "Lenses", "Audio", "Lighting", "Support"];
+  const filterCategories = [
+    { id: "all", vi: "Tất cả", en: "All" },
+    { id: "cameras", vi: "Máy quay", en: "Cameras" },
+    { id: "lenses", vi: "Ống kính", en: "Lenses" },
+    { id: "audio", vi: "Âm thanh", en: "Audio" },
+    { id: "lighting", vi: "Ánh sáng", en: "Lighting" },
+    { id: "support", vi: "Thiết bị hỗ trợ", en: "Support" },
+  ];
 
   return (
     <AppScreen className="max-w-5xl pt-5 sm:pt-7">
@@ -114,18 +131,18 @@ export default async function EquipmentPage({
 
       <div className="mt-4 flex gap-2 overflow-x-auto pb-1 text-[12px] font-bold [scrollbar-width:none]">
         {filterCategories.map((filter) => {
-          const isActive = currentFilter.toLowerCase() === filter.toLowerCase();
+          const isActive = currentFilter.toLowerCase() === filter.id;
           return (
             <Link
-              key={filter}
-              href={filter.toLowerCase() === "all" ? "/equipment" : `/equipment?category=${filter.toLowerCase()}`}
+              key={filter.id}
+              href={filter.id === "all" ? "/equipment" : `/equipment?category=${filter.id}`}
               className={`shrink-0 rounded-pill px-4 py-2.5 text-xs font-black transition duration-fast active:scale-press ${
                 isActive
                   ? "bg-ink text-white shadow-soft"
                   : "border border-stroke/70 bg-surface text-ink shadow-soft hover:border-ink/20 hover:bg-white"
               }`}
             >
-              {filter}
+              <LocalizedText vi={filter.vi} en={filter.en} />
             </Link>
           );
         })}
@@ -154,7 +171,7 @@ export default async function EquipmentPage({
                     )}
                     <span className="absolute bottom-1 right-1 text-[7px] font-black uppercase tracking-wide text-ink/45">GL</span>
                   </div>
-                  <span className={`mt-1.5 inline-flex rounded-pill px-2 py-0.5 text-[8px] font-black uppercase ${statusTone(item.status)}`}>{item.status}</span>
+                  <span className={`mt-1.5 inline-flex rounded-pill px-2.5 py-0.5 text-[9px] font-black uppercase ${statusTone(item.status)}`}><StatusText status={item.status} /></span>
                   <p className="mt-1 truncate text-[11px] font-black leading-tight">{item.name}</p>
                 </Link>
               ))}

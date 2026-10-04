@@ -10,11 +10,11 @@ import { SHOOT_DETAIL_CREW_OPTIONS_TAG } from "@/server/shoot-detail-options";
 export type CrewActionState = { ok: boolean; message?: string; messageVi?: string; messageEn?: string; fieldErrors?: Record<string, string[] | undefined> };
 
 async function context() {
-  const [{ db }, { createOrganizationRepository }, { createCrewRepository }, { createCrewService }] = await Promise.all([
-    import("@/server/db"), import("@/server/db/organizations"), import("@/server/db/crew"), import("@/server/services/crew"),
+  const [{ db }, { requireWorkspaceContext }, { createCrewRepository }, { createCrewService }] = await Promise.all([
+    import("@/server/db"), import("@/server/workspace-context"), import("@/server/db/crew"), import("@/server/services/crew"),
   ]);
-  const organization = await createOrganizationRepository(db).getOrCreateInitial({ name: "G.Lab Studio", timezone: getServerConfig().appTimezone });
-  return { organization, service: createCrewService(createCrewRepository(db)) };
+  const { organization, membership } = await requireWorkspaceContext();
+  return { organization, membership, service: createCrewService(createCrewRepository(db)) };
 }
 
 const optional = (formData: FormData, key: string) => {
@@ -27,6 +27,7 @@ const input = (formData: FormData) => ({
   defaultRole: optional(formData, "defaultRole"),
   phone: optional(formData, "phone"),
   email: optional(formData, "email"),
+  userId: optional(formData, "userId"),
   status: String(formData.get("status") ?? "active"),
   notes: optional(formData, "notes"),
   avatarDataUrl: optional(formData, "avatarDataUrl"),

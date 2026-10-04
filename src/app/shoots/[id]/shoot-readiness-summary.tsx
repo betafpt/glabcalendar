@@ -5,6 +5,7 @@ import { LocalizedText } from "@/components/ui/localized-text";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { StatusChip } from "@/components/ui/status-chip";
 import type { ShootReadinessSummary } from "@/server/services/shoot-readiness";
+import { motion, useReducedMotion } from "motion/react";
 
 export function ShootReadinessSummaryCard({
   readiness,
@@ -13,26 +14,35 @@ export function ShootReadinessSummaryCard({
 }) {
   const isCancelled = readiness.isCancelled;
   const hasConflicts = readiness.hasConflicts;
-  const isReady = readiness.isReadyForCallTime;
+  const isReady = readiness.isReady;
+  const reduceMotion = useReducedMotion();
 
   return (
-    <div
-      className={`rounded-r28 p-4 sm:p-5 shadow-soft transition-colors ${
+    <motion.div
+      initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={reduceMotion ? { duration: 0 } : { duration: 0.26, delay: 0.08, ease: "easeOut" }}
+      className={`rounded-r22 border p-3 sm:p-4 transition-colors ${
         isCancelled
-          ? "border border-ink/10 bg-surface"
+          ? "border-ink/10 bg-surface/80"
           : hasConflicts
-          ? "border border-error/25 bg-coral"
-          : "bg-mint"
+          ? "border-error/20 bg-error/[0.035]"
+          : "border-stroke/75 bg-white/55"
       }`}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-[.16em] text-ink/80">
-            <LocalizedText vi="MỨC ĐỘ SẴN SÀNG" en="PRODUCTION READINESS" />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-baseline gap-2.5">
+          <p className="text-[11px] font-black uppercase tracking-[.16em] text-secondary">
+            <LocalizedText vi="CHECKLIST" en="CHECKLIST" />
           </p>
-          <p className="mt-1 font-display text-[3.8rem] font-black leading-[.74] tracking-[-.065em] sm:text-[4.6rem]">
+          <motion.p
+            key={readiness.readinessPercent}
+            initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="font-display text-2xl font-black leading-none tracking-[-.04em] text-ink sm:text-3xl"
+          >
             {readiness.readinessPercent}%
-          </p>
+          </motion.p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -61,12 +71,11 @@ export function ShootReadinessSummaryCard({
               <LocalizedText vi="Đang chuẩn bị" en="In prep" />
             </StatusChip>
           )}
-          <span className="hidden text-5xl font-black text-pink sm:inline-block">*</span>
         </div>
       </div>
 
       {/* Progress Bar & Ratio */}
-      <div className="mt-3">
+      <div className="mt-2.5">
         <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-[.1em] text-secondary">
           <span>
             {readiness.checklistTotal > 0 ? (
@@ -82,14 +91,14 @@ export function ShootReadinessSummaryCard({
         </div>
         <ProgressBar
           value={readiness.readinessPercent}
-          className="mt-1.5 h-2.5 bg-ink/10"
+          className="mt-1.5 h-1.5 bg-ink/10"
         />
       </div>
 
       {/* 3 Pillars: Checklist, Crew, Gear */}
-      <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+      <div className="mt-3 grid grid-cols-3 gap-2">
         {/* Checklist Pillar */}
-        <div className="rounded-r16 border border-ink/5 bg-white/70 p-2.5">
+        <motion.div whileHover={reduceMotion ? undefined : { y: -1 }} className="rounded-r14 border border-ink/5 bg-white/60 p-2.5">
           <p className="text-[10px] font-black uppercase tracking-[.14em] text-secondary">
             <LocalizedText vi="CHECKLIST" en="CHECKLIST" />
           </p>
@@ -118,10 +127,11 @@ export function ShootReadinessSummaryCard({
               </span>
             )}
           </p>
-        </div>
+        </motion.div>
 
         {/* Crew Pillar */}
-        <div
+        <motion.div
+          whileHover={reduceMotion ? undefined : { y: -1 }}
           className={`rounded-r16 border p-2.5 ${
             readiness.crewConflictCount > 0
               ? "border-error/30 bg-error/10"
@@ -161,10 +171,11 @@ export function ShootReadinessSummaryCard({
               </span>
             )}
           </p>
-        </div>
+        </motion.div>
 
         {/* Gear Pillar */}
-        <div
+        <motion.div
+          whileHover={reduceMotion ? undefined : { y: -1 }}
           className={`rounded-r16 border p-2.5 ${
             readiness.equipmentConflictCount > 0
               ? "border-error/30 bg-error/10"
@@ -204,7 +215,7 @@ export function ShootReadinessSummaryCard({
               </span>
             )}
           </p>
-        </div>
+        </motion.div>
       </div>
 
       {/* Conflict Details Alert */}
@@ -261,6 +272,6 @@ export function ShootReadinessSummaryCard({
           />
         </div>
       ) : null}
-    </div>
+    </motion.div>
   );
 }

@@ -7,6 +7,7 @@ import { CompactPageHeader } from "@/components/ui/compact-page-header";
 import { LanguageSwitcher } from "@/components/ui/language-switcher";
 import { LocalizedText } from "@/components/ui/localized-text";
 import { logoutAction } from "@/app/login/actions";
+import { clearClientDataOnSignOut } from "@/lib/client-cleanup";
 
 import {
   User,
@@ -38,7 +39,8 @@ const settingsRows: SettingsRow[] = [
     en: "Account",
     subVi: "Hồ sơ, email, mật khẩu",
     subEn: "Profile, email, password",
-    available: false,
+    href: "/settings/account",
+    available: true,
     icon: <User size={18} variant="Linear" />,
   },
   {
@@ -46,7 +48,8 @@ const settingsRows: SettingsRow[] = [
     en: "Team",
     subVi: "Quản lý thành viên",
     subEn: "Manage team members",
-    available: false,
+    href: "/settings/team",
+    available: true,
     icon: <People size={18} variant="Linear" />,
   },
   {
@@ -84,9 +87,10 @@ const settingsRows: SettingsRow[] = [
   {
     vi: "Trợ lý AI",
     en: "AI Assistant",
-    subVi: "Model và tùy chọn",
-    subEn: "Model and preferences",
-    href: "/ai",
+    subVi: "API Key 302.AI, Model & Hạn mức",
+    subEn: "302.AI Key, Model & Quota",
+    href: "/settings/ai",
+    available: true,
     icon: <MagicStar size={18} variant="Linear" />,
   },
   {
@@ -207,7 +211,13 @@ export default function SettingsPage() {
 
       {/* Sign Out Card */}
       <section className="overflow-hidden rounded-r22 border border-error/20 bg-surface shadow-soft p-4">
-        <form action={logoutAction} className="flex flex-wrap items-center justify-between gap-3">
+        <form
+          action={async () => {
+            await clearClientDataOnSignOut();
+            await logoutAction();
+          }}
+          className="flex flex-wrap items-center justify-between gap-3"
+        >
           <div className="flex items-center gap-3">
             <span className="grid size-9 shrink-0 place-items-center rounded-full bg-error/10 text-error">
               <LogoutCurve size={18} variant="Linear" />

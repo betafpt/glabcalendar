@@ -10,7 +10,9 @@ export type ShootProjectOption = {
 
 export type ShootCrewOption = {
   id: string;
+  userId: string | null;
   name: string;
+  email: string | null;
   defaultRole: string | null;
   status: string;
 };
@@ -37,7 +39,9 @@ export const getShootDetailOptions = unstable_cache(
       db
         .select({
           id: crewMembers.id,
+          userId: crewMembers.userId,
           name: crewMembers.name,
+          email: crewMembers.email,
           defaultRole: crewMembers.defaultRole,
           status: crewMembers.status,
         })

@@ -51,7 +51,7 @@ export type ShootReadinessSummary = {
   hasConflicts: boolean;
   status: ShootReadinessStatus;
   readinessPercent: number;
-  isReadyForCallTime: boolean;
+  isReady: boolean;
 };
 
 export function calculateShootReadiness(input: {
@@ -126,7 +126,7 @@ export function calculateShootReadiness(input: {
     readinessPercent = checklistPercent;
   }
 
-  const isReadyForCallTime =
+  const isReady =
     !isCancelled &&
     !hasConflicts &&
     checklistTotal > 0 &&
@@ -149,6 +149,6 @@ export function calculateShootReadiness(input: {
     hasConflicts,
     status,
     readinessPercent,
-    isReadyForCallTime,
+    isReady,
   };
 }

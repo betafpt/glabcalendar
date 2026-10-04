@@ -1,6 +1,6 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, notLike, or } from "drizzle-orm";
 import type { Database } from "./index";
-import { shoots, type NewShoot, type Shoot } from "./schema";
+import { shootAssignees, shoots, type NewShoot, type Shoot } from "./schema";
 
 export type CreateShootInput = Omit<
   NewShoot,
@@ -21,7 +21,23 @@ export function createShootRepository(database: Database) {
         .orderBy(desc(shoots.startsAt));
     },
 
-    async listSummaries(organizationId: string) {
+    async listSummaries(organizationId: string, options: { includeTestData?: boolean } = {}) {
+      const conditions = [eq(shoots.organizationId, organizationId)];
+
+      // Mặc định ẩn các event test và excluded khỏi danh sách
+      if (!options.includeTestData) {
+        const notTest = or(isNull(shoots.isTestData), eq(shoots.isTestData, false));
+        if (notTest) conditions.push(notTest);
+        const notExcluded = or(isNull(shoots.syncPolicy), ne(shoots.syncPolicy, "excluded"));
+        if (notExcluded) conditions.push(notExcluded);
+        const notLegacyGoogleBirthday = or(
+          ne(shoots.syncPolicy, "google"),
+          isNull(shoots.sourceCalendarId),
+          notLike(shoots.sourceCalendarId, "%#contacts@group.v.calendar.google.com")
+        );
+        if (notLegacyGoogleBirthday) conditions.push(notLegacyGoogleBirthday);
+      }
+
       return database
         .select({
           id: shoots.id,
@@ -31,10 +47,61 @@ export function createShootRepository(database: Database) {
           startsAt: shoots.startsAt,
           endsAt: shoots.endsAt,
           locationName: shoots.locationName,
+          syncPolicy: shoots.syncPolicy,
+          isTestData: shoots.isTestData,
+          sourceCalendarId: shoots.sourceCalendarId,
+          externalEventId: shoots.externalEventId,
         })
         .from(shoots)
-        .where(eq(shoots.organizationId, organizationId))
+        .where(and(...conditions))
         .orderBy(desc(shoots.startsAt));
+    },
+
+    async listAssignedSummaries(userId: string, options: { includeTestData?: boolean } = {}) {
+      const conditions = [eq(shootAssignees.userId, userId)];
+      if (!options.includeTestData) {
+        const notTest = or(isNull(shoots.isTestData), eq(shoots.isTestData, false));
+        if (notTest) conditions.push(notTest);
+        const notExcluded = or(isNull(shoots.syncPolicy), ne(shoots.syncPolicy, "excluded"));
+        if (notExcluded) conditions.push(notExcluded);
+      }
+
+      return database
+        .select({
+          id: shoots.id,
+          projectId: shoots.projectId,
+          title: shoots.title,
+          status: shoots.status,
+          startsAt: shoots.startsAt,
+          endsAt: shoots.endsAt,
+          locationName: shoots.locationName,
+          syncPolicy: shoots.syncPolicy,
+          isTestData: shoots.isTestData,
+          sourceCalendarId: shoots.sourceCalendarId,
+          externalEventId: shoots.externalEventId,
+        })
+        .from(shootAssignees)
+        .innerJoin(shoots, eq(shootAssignees.shootId, shoots.id))
+        .where(and(...conditions))
+        .orderBy(desc(shoots.startsAt));
+    },
+
+    async findAccessibleById(organizationId: string, shootId: string, userId: string) {
+      const [row] = await database
+        .select({ shoot: shoots })
+        .from(shoots)
+        .leftJoin(
+          shootAssignees,
+          and(eq(shootAssignees.shootId, shoots.id), eq(shootAssignees.userId, userId))
+        )
+        .where(
+          and(
+            eq(shoots.id, shootId),
+            or(eq(shoots.organizationId, organizationId), eq(shootAssignees.userId, userId))
+          )
+        )
+        .limit(1);
+      return row?.shoot ?? null;
     },
 
     async findById(
