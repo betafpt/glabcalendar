@@ -281,3 +281,11 @@ Mọi thành phần giao diện mới được xây dựng **bắt buộc import
   - Next.js production build hoàn tất 18/18 routes sạch sẽ, Shared JS First Load chỉ 87.4 kB.
   - Đã kiểm thử trực quan trên cả Desktop 1440px và Mobile 390px qua browser subagent như người dùng thực thụ.
 
+### 6.9. Sửa lỗi Server Components Render & Date Serialization Boundary (04/10/2026):
+- **1. Triệt tiêu lỗi Server Components Render (`error.tsx`):**
+  - Nguyên nhân: Trong Next.js App Router, `redirect()` ném biệt lệ nội bộ `NEXT_REDIRECT`. Khi bọc `requireWorkspaceContext()` trong `try ... catch` mà không kiểm tra `isRedirectError`, khối catch nuốt mất tín hiệu chuyển hướng của Next.js khiến Server Component rơi vào trạng thái lỗi render ở production.
+  - Khắc phục: Xây dựng hàm helper `isRedirectError(error)` chuẩn hóa trong `src/server/workspace-context.ts` và re-throw xuyên suốt các page loaders (`/calendar`, `/shoots`, `/shoots/[id]`, `/crew`, `/equipment`, `/projects`, `/integrations/google-calendar`, `/`).
+- **2. Khắc phục Date Serialization Boundary từ `unstable_cache`:**
+  - Nguyên nhân: Next.js `unstable_cache` serialize dữ liệu trả về qua JSON khiến các trường `Date` (`startsAt`, `endsAt`, `createdAt`, `updatedAt`, `anchor`) bị biến thành string ISO, dẫn đến `RangeError: Invalid time value` khi gọi `Intl.DateTimeFormat.prototype.format()` hoặc `a.startsAt.getTime()`.
+  - Khắc phục: Tự động re-hydrate toàn bộ đối tượng `Date` ngay tại `src/server/cached-loaders.ts` và bọc hàm chuyển đổi an toàn `toDate()` trong `src/app/calendar/page.tsx` và `src/app/integrations/google-calendar/google-calendar-view.tsx`.
+
