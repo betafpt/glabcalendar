@@ -696,7 +696,7 @@ export default async function CalendarPage({
   });
 
   return (
-    <div className="w-full pb-32 pt-1 sm:pb-24 lg:pb-8">
+    <div className="w-full flex-1 flex flex-col min-h-0 lg:h-full lg:max-h-full lg:overflow-hidden pb-24 lg:pb-0">
       {/* 1. TOP HEADER (Góc trái: G.Lab Calendar *, Giữa: [Ngày | Tuần | Tháng] với Tuần active, Phải: controls) */}
       <CalendarTopHeader
         view={view}
@@ -749,9 +749,9 @@ export default async function CalendarPage({
       </div>
 
       {/* 2. MAIN 2-COLUMN WORKSPACE: CONTEXT PANEL + FLUID GAP + MAIN CALENDAR */}
-      <div className="mt-4 flex flex-col gap-6 lg:calendar-workspace-grid lg:items-start">
-        {/* VÙNG 2: LEFT CONTEXT PANEL (Fluid clamp(340px, 20vw, 380px) column, sticky on desktop) */}
-        <div className="hidden lg:block w-full shrink-0 lg:sticky lg:top-4">
+      <div className="mt-3 flex-1 min-h-0 flex flex-col gap-4 lg:calendar-workspace-grid lg:items-stretch lg:overflow-hidden">
+        {/* VÙNG 2: LEFT CONTEXT PANEL (Fluid clamp(340px, 20vw, 380px) column, sticky/scrollable on desktop) */}
+        <div className="hidden lg:flex lg:flex-col lg:h-full lg:min-h-0 lg:overflow-y-auto [scrollbar-width:thin] pr-1">
           <CalendarContextPanel
             currentAnchor={anchor}
             selectedDate={anchor}
@@ -763,7 +763,7 @@ export default async function CalendarPage({
         </div>
 
         {/* VÙNG 3: MAIN CALENDAR (Focal point chính bắt đầu cùng hàng với context panel) */}
-        <div className="min-w-0 flex-1 space-y-3">
+        <div className="min-w-0 flex-1 flex flex-col h-full min-h-0 overflow-hidden space-y-2">
           {/* Database Error Banner */}
           {data.error ? <DatabaseErrorBanner error={data.error} /> : null}
 
@@ -816,7 +816,7 @@ export default async function CalendarPage({
           ) : null}
 
           {/* PRIMARY CALENDAR VIEW: WEEK TIMELINE (REFERENCE-IDENTICAL) / MONTH DND / DAY TIMELINE */}
-          <CalendarViewTransition viewKey={`${view}-${cleanParams.date ?? ""}`}>
+          <CalendarViewTransition viewKey={`${view}-${cleanParams.date ?? ""}`} className="flex-1 min-h-0 flex flex-col h-full overflow-hidden">
             {view === "week" ? (
               <CalendarTimelineWeek
                 days={weekTimelineDays}

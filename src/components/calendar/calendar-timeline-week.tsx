@@ -1,6 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useTransition } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useTransition,
+  useRef,
+  useCallback,
+} from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -36,6 +43,19 @@ import {
 } from "@/components/ui/alert-dialog";
 import { rescheduleShootAction } from "@/app/shoots/actions";
 import { cn } from "@/lib/utils";
+
+export type TimelineDensity = "compact" | "standard" | "spacious";
+
+export const DENSITY_CONFIG: Record<
+  TimelineDensity,
+  { label: string; shortLabel: string; hourHeight: number; minCardHeight: number }
+> = {
+  compact: { label: "Gọn", shortLabel: "Gọn", hourHeight: 40, minCardHeight: 36 },
+  standard: { label: "Tiêu chuẩn", shortLabel: "Chuẩn", hourHeight: 56, minCardHeight: 48 },
+  spacious: { label: "Rộng", shortLabel: "Rộng", hourHeight: 80, minCardHeight: 64 },
+};
+
+export const DENSITY_STORAGE_KEY = "glab_timeline_density";
 
 export type TimelineShootItem = {
   id: string;
@@ -82,25 +102,19 @@ const eventTones = [
 
 export const START_HOUR = 7;
 export const END_HOUR = 21; // 9:00 PM
-export const TOTAL_MINUTES = (END_HOUR - START_HOUR) * 60; // 840 mins
+export const TOTAL_HOURS = END_HOUR - START_HOUR; // 14 hours
+export const TOTAL_MINUTES = TOTAL_HOURS * 60; // 840 mins
 
-export const hourSlots = [
-  { hour: 7, label: "7 Am" },
-  { hour: 8, label: "8 Am" },
-  { hour: 9, label: "9 Am" },
-  { hour: 10, label: "10 Am" },
-  { hour: 11, label: "11 Am" },
-  { hour: 12, label: "12 Pm" },
-  { hour: 13, label: "1 Pm" },
-  { hour: 14, label: "2 Pm" },
-  { hour: 15, label: "3 Pm" },
-  { hour: 16, label: "4 Pm" },
-  { hour: 17, label: "5 Pm" },
-  { hour: 18, label: "6 Pm" },
-  { hour: 19, label: "7 Pm" },
-  { hour: 20, label: "8 Pm" },
-  { hour: 21, label: "9 Pm" },
-];
+export const hourSlots = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => {
+  const hour = START_HOUR + i;
+  const label =
+    hour === 12
+      ? "12 Pm"
+      : hour > 12
+      ? `${hour - 12} Pm`
+      : `${hour} Am`;
+  return { hour, label };
+});
 
 function getMinutesInDay(isoString: string, timeZone: string): number {
   try {
@@ -132,7 +146,9 @@ type PositionedShoot = {
 function computeDayShootPositions(
   shoots: TimelineShootItem[],
   dayKey: string,
-  timeZone: string
+  timeZone: string,
+  hourHeight: number,
+  minCardHeight: number
 ): PositionedShoot[] {
   if (shoots.length === 0) return [];
 
@@ -169,7 +185,7 @@ function computeDayShootPositions(
     const startOffset = Math.max(0, startMins - START_HOUR * 60);
     const endOffset = Math.min(
       TOTAL_MINUTES,
-      Math.max(startOffset + 30, endMins - START_HOUR * 60)
+      Math.max(startOffset + 15, endMins - START_HOUR * 60)
     );
 
     return {
@@ -203,12 +219,9 @@ function computeDayShootPositions(
   for (const cluster of clusters) {
     const totalCols = cluster.length;
     cluster.forEach((item, colIdx) => {
-      const topFraction = Math.max(0, Math.min(1, item.startOffset / TOTAL_MINUTES));
-      const durationMins = Math.max(30, item.endOffset - item.startOffset);
-      const heightFraction = Math.max(0.04, durationMins / TOTAL_MINUTES);
-
-      const top = `calc(12px + ${(topFraction).toFixed(4)} * (100% - 24px))`;
-      const height = `calc(${(heightFraction).toFixed(4)} * (100% - 24px))`;
+      const topPx = Math.round((item.startOffset / 60) * hourHeight);
+      const durationHours = (item.endOffset - item.startOffset) / 60;
+      const heightPx = Math.max(minCardHeight, Math.round(durationHours * hourHeight));
 
       let left = "2px";
       let width = "calc(100% - 4px)";
@@ -220,8 +233,8 @@ function computeDayShootPositions(
 
       results.push({
         shoot: item.shoot,
-        top,
-        height,
+        top: `${topPx}px`,
+        height: `${heightPx}px`,
         left,
         width,
         zIndex: 10 + colIdx,
@@ -283,6 +296,46 @@ export function CalendarTimelineWeek({
   const [activeShoot, setActiveShoot] = useState<ActiveDragData | null>(null);
   const [conflictData, setConflictData] = useState<ConflictDialogState>(null);
 
+  // Density State (compact: 40px, standard: 56px, spacious: 80px)
+  const [density, setDensity] = useState<TimelineDensity>("standard");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DENSITY_STORAGE_KEY) as TimelineDensity | null;
+      if (saved && (saved === "compact" || saved === "standard" || saved === "spacious")) {
+        setDensity(saved);
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, []);
+
+  const handleDensityChange = (newDensity: TimelineDensity) => {
+    setDensity(newDensity);
+    try {
+      localStorage.setItem(DENSITY_STORAGE_KEY, newDensity);
+    } catch {
+      // Ignore
+    }
+  };
+
+  const hourHeight = DENSITY_CONFIG[density].hourHeight;
+  const minCardHeight = DENSITY_CONFIG[density].minCardHeight;
+
+  // Timeline Scroll Ref & Auto-scroll logic
+  const timelineScrollRef = useRef<HTMLDivElement>(null);
+  const hasUserScrolledRef = useRef(false);
+
+  const scrollToTime = useCallback((targetHour: number, smooth = true) => {
+    if (!timelineScrollRef.current) return;
+    const hourToView = Math.max(START_HOUR, targetHour - 1);
+    const targetScrollTop = (hourToView - START_HOUR) * hourHeight;
+    timelineScrollRef.current.scrollTo({
+      top: targetScrollTop,
+      behavior: smooth ? "smooth" : "auto",
+    });
+  }, [hourHeight]);
+
   useEffect(() => {
     setColumnsData(days);
   }, [days]);
@@ -291,6 +344,25 @@ export function CalendarTimelineWeek({
   const now = new Date();
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
+
+  // Auto-scroll when viewing current period or another week
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (isViewingCurrentPeriod) {
+        if (!hasUserScrolledRef.current) {
+          scrollToTime(currentHour, false);
+        }
+      } else {
+        scrollToTime(8, false); // 08:00 AM for other weeks
+      }
+    }, 60);
+
+    return () => clearTimeout(timer);
+  }, [isViewingCurrentPeriod, currentHour, scrollToTime]);
+
+  const handleScroll = () => {
+    hasUserScrolledRef.current = true;
+  };
 
   // Sensors for DnD
   const sensors = useSensors(
@@ -432,10 +504,10 @@ export function CalendarTimelineWeek({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <section className="overflow-hidden rounded-[24px] border border-black/[0.05] bg-white p-4 sm:p-5 2xl:p-6 shadow-sm calendar-min-h flex flex-col">
-        {/* TIMELINE TOP TOOLBAR: PERIOD TITLE, PREV/NEXT, TODAY & + TẠO LỊCH QUAY (Directly above grid) */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-3.5 border-b border-black/[0.05] shrink-0">
-          <div className="flex items-center gap-3">
+      <section className="overflow-hidden rounded-[24px] border border-black/[0.05] bg-white p-3 sm:p-4 2xl:p-5 shadow-sm flex flex-col h-full min-h-0">
+        {/* TIMELINE TOP TOOLBAR: PERIOD TITLE, PREV/NEXT, TODAY/HIỆN TẠI, DENSITY & + TẠO LỊCH QUAY */}
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between pb-3 border-b border-black/[0.05] shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             <h3 className="font-display text-base sm:text-lg font-black tracking-tight text-ink">
               {periodLabel}
             </h3>
@@ -460,6 +532,14 @@ export function CalendarTimelineWeek({
 
             <Link
               href={onNavigateToday}
+              onClick={(e) => {
+                if (isViewingCurrentPeriod) {
+                  e.preventDefault();
+                  hasUserScrolledRef.current = false;
+                  scrollToTime(currentHour, true);
+                }
+              }}
+              title="Về ngày và giờ hiện tại"
               className={cn(
                 "inline-flex min-h-8 items-center rounded-full px-3 text-[11px] font-black transition-all duration-fast active:scale-press",
                 isViewingCurrentPeriod
@@ -467,29 +547,62 @@ export function CalendarTimelineWeek({
                   : "bg-surface border border-black/[0.06] text-ink hover:bg-white"
               )}
             >
-              <LocalizedText vi="Hôm nay" en="Today" />
+              <LocalizedText vi="Hiện tại" en="Today" />
             </Link>
           </div>
 
-          {/* Primary Action Button "+ Tạo lịch quay" */}
-          <div className="flex items-center justify-end">
+          {/* Right controls: Density Switcher & + Tạo lịch quay */}
+          <div className="flex items-center gap-2 sm:gap-3 justify-between sm:justify-end">
+            {/* Time Density Switcher: Gọn (40px) | Tiêu chuẩn (56px) | Rộng (80px) */}
+            <div className="flex items-center rounded-full bg-surface border border-black/[0.06] p-0.5 shadow-2xs">
+              {(["compact", "standard", "spacious"] as const).map((d) => {
+                const cfg = DENSITY_CONFIG[d];
+                const active = density === d;
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => handleDensityChange(d)}
+                    title={`${cfg.label} (${cfg.hourHeight}px/giờ)`}
+                    className={cn(
+                      "rounded-full px-2.5 py-1 text-[11px] font-black transition-all duration-fast",
+                      active
+                        ? "bg-white text-ink shadow-xs"
+                        : "text-secondary hover:text-ink hover:bg-white/50"
+                    )}
+                  >
+                    {cfg.shortLabel}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Primary Action Button "+ Tạo lịch quay" */}
             <Link
               href="/shoots"
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-ink px-4 text-xs font-black text-white shadow-soft transition-all duration-fast hover:bg-pink active:scale-press"
+              className="inline-flex min-h-8 sm:min-h-9 items-center gap-1.5 rounded-full bg-ink px-3 sm:px-4 text-[11px] sm:text-xs font-black text-white shadow-soft transition-all duration-fast hover:bg-pink active:scale-press shrink-0"
             >
               <Add size={14} variant="Linear" />
-              <span>Tạo lịch quay</span>
+              <span className="hidden sm:inline">Tạo lịch quay</span>
+              <span className="sm:hidden">Tạo</span>
             </Link>
           </div>
         </div>
 
-        {/* TIMELINE GRID CONTAINER: GMT+7 & TIME ROW SLOTS & 7-DAY COLUMNS */}
-        <div className="mt-4 flex-1 flex flex-col overflow-x-auto [scrollbar-width:thin]">
-          <div className="min-w-[720px] flex-1 flex flex-col">
-            {/* Header Row: GMT+7 + 7 Days (e.g. 05 Mon, 06 Tue...) */}
-            <div className="grid grid-cols-[70px_repeat(7,minmax(0,1fr))] border-b border-black/[0.05] pb-3 shrink-0">
-              {/* GMT label */}
-              <div className="text-[11px] font-black uppercase text-secondary/70 flex items-center justify-start pl-1">
+        {/* TIMELINE SCROLL AREA (CHỈ VÙNG NÀY ĐƯỢC overflow-y: auto) */}
+        <div
+          ref={timelineScrollRef}
+          onScroll={handleScroll}
+          className="timeline-scroll-area mt-3 flex-1 min-h-0 overflow-y-auto overflow-x-auto [scrollbar-width:thin] select-none overscroll-contain relative"
+        >
+          <div
+            className="min-w-[720px] flex flex-col relative"
+            style={{ minHeight: `${TOTAL_HOURS * hourHeight + 52}px` }}
+          >
+            {/* 2.1 STICKY DAY HEADERS ROW */}
+            <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md grid grid-cols-[60px_repeat(7,minmax(0,1fr))] border-b border-black/[0.05] pb-2 pt-1.5">
+              {/* Top-left corner: GMT+7 (sticky both top and left) */}
+              <div className="sticky left-0 z-40 bg-white/95 backdrop-blur-md text-[10px] font-black uppercase text-secondary/70 flex items-center justify-start pl-1.5">
                 GMT+7
               </div>
 
@@ -506,7 +619,7 @@ export function CalendarTimelineWeek({
                   </div>
                   <div
                     className={cn(
-                      "mt-1 text-[10px] font-bold uppercase tracking-wider",
+                      "mt-0.5 text-[10px] font-bold uppercase tracking-wider",
                       day.isToday ? "text-pink font-black" : "text-secondary"
                     )}
                   >
@@ -516,43 +629,50 @@ export function CalendarTimelineWeek({
               ))}
             </div>
 
-            {/* Timeline Rows: Hour slots and Event Cards */}
-            <div className="relative mt-2 flex-1 flex flex-col min-h-[calc(14*var(--calendar-slot-min-height))]">
-              {/* Current Time Horizontal Indicator Line (Signature Timeline Feature) */}
+            {/* 2.2 TIMELINE BODY GRID: STICKY TIME COLUMN + 7 DAY COLUMNS */}
+            <div
+              className="relative flex-1 grid grid-cols-[60px_repeat(7,minmax(0,1fr))]"
+              style={{ height: `${TOTAL_HOURS * hourHeight}px` }}
+            >
+              {/* STICKY TIME MARKERS COLUMN (sticky left-0) */}
+              <div className="sticky left-0 z-20 bg-white/95 backdrop-blur-md relative h-full select-none">
+                {hourSlots.map((slot, idx) => (
+                  <div
+                    key={slot.hour}
+                    className="absolute left-0 right-0 -translate-y-1/2 pl-1.5 text-[11px] font-extrabold text-secondary/60 leading-none flex items-center"
+                    style={{ top: `${idx * hourHeight}px` }}
+                  >
+                    {slot.label}
+                  </div>
+                ))}
+              </div>
+
+              {/* 7 COLUMNS DROP ZONES */}
+              {columnsData.map((col, colIdx) => (
+                <DroppableTimelineColumn
+                  key={col.dateKey}
+                  day={col}
+                  colIdx={colIdx}
+                  timezone={timezone}
+                  projectMap={projectMap}
+                  hourHeight={hourHeight}
+                  minCardHeight={minCardHeight}
+                  density={density}
+                />
+              ))}
+
+              {/* CURRENT TIME HORIZONTAL INDICATOR LINE */}
               {currentHour >= START_HOUR && currentHour <= END_HOUR && (
                 <div
-                  className="pointer-events-none absolute left-0 right-0 z-20 flex items-center"
+                  className="pointer-events-none absolute left-0 right-0 z-25 flex items-center"
                   style={{
-                    top: `calc(12px + ${(Math.min(TOTAL_MINUTES, Math.max(0, (currentHour - START_HOUR) * 60 + currentMinute)) / TOTAL_MINUTES).toFixed(4)} * (100% - 24px))`,
+                    top: `${(((Math.min(TOTAL_MINUTES, Math.max(0, (currentHour - START_HOUR) * 60 + currentMinute)))) / 60) * hourHeight}px`,
                   }}
                 >
-                  <span className="size-2 rounded-full bg-pink shadow-[0_0_8px_rgba(255,79,154,0.8)]" />
+                  <span className="size-2 rounded-full bg-pink shadow-[0_0_8px_rgba(255,79,154,0.8)] -ml-1" />
                   <div className="h-[1.5px] w-full bg-pink/60 shadow-sm" />
                 </div>
               )}
-
-              {/* Hour Grid Rows (8 Am - 6 Pm) */}
-              <div className="flex-1 grid grid-cols-[70px_repeat(7,minmax(0,1fr))]">
-                {/* Time markers column */}
-                <div className="flex flex-col justify-between py-3 text-left text-[11px] font-extrabold text-secondary/60 select-none">
-                  {hourSlots.map((slot) => (
-                    <div key={slot.hour} className="leading-none flex items-center">
-                      {slot.label}
-                    </div>
-                  ))}
-                </div>
-
-                {/* 7 Columns Drop Zones for Events */}
-                {columnsData.map((col, colIdx) => (
-                  <DroppableTimelineColumn
-                    key={col.dateKey}
-                    day={col}
-                    colIdx={colIdx}
-                    timezone={timezone}
-                    projectMap={projectMap}
-                  />
-                ))}
-              </div>
             </div>
           </div>
         </div>
@@ -659,11 +779,17 @@ function DroppableTimelineColumn({
   colIdx,
   timezone,
   projectMap,
+  hourHeight,
+  minCardHeight,
+  density,
 }: {
   day: TimelineDayData;
   colIdx: number;
   timezone: string;
   projectMap: Record<string, string>;
+  hourHeight: number;
+  minCardHeight: number;
+  density: TimelineDensity;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `timeline-col-${day.dateKey}`,
@@ -671,8 +797,8 @@ function DroppableTimelineColumn({
   });
 
   const positionedShoots = useMemo(
-    () => computeDayShootPositions(day.shoots, day.dateKey, timezone),
-    [day.shoots, day.dateKey, timezone]
+    () => computeDayShootPositions(day.shoots, day.dateKey, timezone, hourHeight, minCardHeight),
+    [day.shoots, day.dateKey, timezone, hourHeight, minCardHeight]
   );
 
   return (
@@ -685,9 +811,13 @@ function DroppableTimelineColumn({
       )}
     >
       {/* Background hour divider lines */}
-      <div className="pointer-events-none absolute inset-0 flex flex-col justify-between py-3">
-        {hourSlots.map((slot) => (
-          <div key={slot.hour} className="h-px w-full bg-stroke/30" />
+      <div className="pointer-events-none absolute inset-0">
+        {Array.from({ length: TOTAL_HOURS + 1 }).map((_, idx) => (
+          <div
+            key={idx}
+            className="absolute left-0 right-0 h-px bg-stroke/30"
+            style={{ top: `${idx * hourHeight}px` }}
+          />
         ))}
       </div>
 
@@ -696,6 +826,7 @@ function DroppableTimelineColumn({
         {positionedShoots.map(({ shoot, top, height, left, width, zIndex }, shootIdx) => {
           const tone = eventTones[(colIdx + shootIdx) % eventTones.length];
           const projectName = shoot.projectId ? projectMap[shoot.projectId] : undefined;
+          const heightPx = parseInt(height, 10) || hourHeight;
 
           return (
             <div
@@ -705,8 +836,6 @@ function DroppableTimelineColumn({
                 position: "absolute",
                 top,
                 height,
-                minHeight: "96px",
-                maxHeight: `calc(100% - ${top} + 12px)`,
                 left,
                 width,
                 zIndex,
@@ -717,6 +846,8 @@ function DroppableTimelineColumn({
                 tone={tone}
                 timezone={timezone}
                 projectName={projectName}
+                density={density}
+                heightPx={heightPx}
               />
             </div>
           );
@@ -731,11 +862,15 @@ function DraggableTimelineShootCard({
   tone,
   timezone,
   projectName,
+  density,
+  heightPx,
 }: {
   shoot: TimelineShootItem;
   tone: string;
   timezone: string;
   projectName?: string;
+  density: TimelineDensity;
+  heightPx: number;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `shoot-${shoot.id}`,
@@ -751,6 +886,8 @@ function DraggableTimelineShootCard({
   });
 
   const timeLabel = `${formatTimeSlot(shoot.startsAt, timezone)} - ${formatTimeSlot(shoot.endsAt, timezone)}`;
+  const isCompact = heightPx < 50;
+  const isStandard = heightPx >= 50 && heightPx < 76;
 
   return (
     <div
@@ -765,64 +902,116 @@ function DraggableTimelineShootCard({
       <Link
         href={`/shoots/${shoot.id}`}
         className={cn(
-          "group flex flex-col justify-between h-full rounded-[14px] sm:rounded-[16px] p-2 sm:px-2.5 sm:py-2 transition-all duration-fast hover:-translate-y-0.5 hover:shadow-soft active:scale-[0.98] overflow-hidden",
+          "group flex flex-col justify-between h-full rounded-[12px] sm:rounded-[14px] transition-all duration-fast hover:-translate-y-0.5 hover:shadow-soft active:scale-[0.98] overflow-hidden",
+          isCompact ? "p-1.5" : "p-2 sm:px-2.5 sm:py-2",
           tone,
           shoot.isPastOrCompleted && "opacity-60 grayscale-[25%]"
         )}
       >
-        {/* Project Name, Title, and Time Slot */}
-        <div className="min-w-0 flex flex-col justify-start">
-          <p className="truncate text-[9px] font-black uppercase tracking-wider opacity-75 leading-none mb-1">
-            {projectName || "G.Lab Shoot"}
-          </p>
-
-          <h4 className="font-display text-[11px] sm:text-[12px] font-black uppercase leading-[1.25] tracking-tight line-clamp-2">
-            {shoot.title}
-          </h4>
-
-          <p className="mt-1 text-[10px] font-extrabold opacity-75 tabular-nums leading-none">
-            {timeLabel}
-          </p>
-        </div>
-
-        {/* Crew Avatar Stack (Max 3 + "+N" badge - Reference-identical!) */}
-        <div className="shrink-0 mt-1 flex items-center justify-between gap-1 pt-1 border-t border-black/5">
-          <div className="flex -space-x-1.5 items-center">
-            {shoot.crewNames && shoot.crewNames.length > 0 ? (
-              <>
-                {shoot.crewNames.slice(0, 3).map((name, i) => (
-                  <div
-                    key={i}
-                    title={name}
-                    className="grid size-5 place-items-center rounded-full bg-ink text-[8px] font-black text-white ring-1 ring-white/80 shrink-0"
-                  >
-                    {name.charAt(0).toUpperCase()}
-                  </div>
-                ))}
-                {shoot.crewNames.length > 3 ? (
-                  <span className="grid size-5 place-items-center rounded-full bg-surface text-[8px] font-black text-ink ring-1 ring-stroke shrink-0">
-                    +{shoot.crewNames.length - 3}
-                  </span>
-                ) : null}
-              </>
-            ) : (
-              <span className="text-[9px] font-bold opacity-60 leading-none">Chưa xếp ekip</span>
-            )}
+        {isCompact ? (
+          /* Ultra Compact View (<50px): single row, title + time + status dot */
+          <div className="flex items-center justify-between gap-1 w-full min-w-0 h-full">
+            <div className="min-w-0 flex items-center gap-1.5">
+              <span
+                className={cn(
+                  "size-1.5 rounded-full shrink-0",
+                  shoot.status === "confirmed"
+                    ? "bg-[#1da875]"
+                    : shoot.status === "cancelled"
+                    ? "bg-error"
+                    : "bg-[#e59b00]"
+                )}
+                title={shoot.status}
+              />
+              <h4 className="font-display text-[10px] font-black uppercase tracking-tight truncate leading-tight">
+                {shoot.title}
+              </h4>
+            </div>
+            <span className="text-[9px] font-extrabold opacity-75 shrink-0 tabular-nums leading-none">
+              {formatTimeSlot(shoot.startsAt, timezone)}
+            </span>
           </div>
+        ) : isStandard ? (
+          /* Standard View (50px - 75px): Project Tag + Title + Time & Status */
+          <div className="min-w-0 flex flex-col justify-between h-full">
+            <div className="min-w-0">
+              <p className="truncate text-[8px] font-black uppercase tracking-wider opacity-70 leading-none mb-0.5">
+                {projectName || "G.Lab Shoot"}
+              </p>
+              <h4 className="font-display text-[11px] font-black uppercase leading-tight tracking-tight truncate">
+                {shoot.title}
+              </h4>
+            </div>
+            <div className="flex items-center justify-between text-[9px] font-extrabold opacity-75 pt-1 border-t border-black/5 leading-none">
+              <span>{timeLabel}</span>
+              <span
+                className={cn(
+                  "size-1.5 rounded-full shrink-0",
+                  shoot.status === "confirmed"
+                    ? "bg-[#1da875]"
+                    : shoot.status === "cancelled"
+                    ? "bg-error"
+                    : "bg-[#e59b00]"
+                )}
+                title={shoot.status}
+              />
+            </div>
+          </div>
+        ) : (
+          /* Spacious View (>=76px): Full rich G.Lab card with crew avatars */
+          <>
+            <div className="min-w-0 flex flex-col justify-start">
+              <p className="truncate text-[9px] font-black uppercase tracking-wider opacity-75 leading-none mb-1">
+                {projectName || "G.Lab Shoot"}
+              </p>
 
-          {/* Status Dot */}
-          <span
-            className={cn(
-              "size-2 rounded-full shrink-0",
-              shoot.status === "confirmed"
-                ? "bg-[#1da875]"
-                : shoot.status === "cancelled"
-                ? "bg-error"
-                : "bg-[#e59b00]"
-            )}
-            title={shoot.status}
-          />
-        </div>
+              <h4 className="font-display text-[11px] sm:text-[12px] font-black uppercase leading-[1.25] tracking-tight line-clamp-2">
+                {shoot.title}
+              </h4>
+
+              <p className="mt-1 text-[10px] font-extrabold opacity-75 tabular-nums leading-none">
+                {timeLabel}
+              </p>
+            </div>
+
+            <div className="shrink-0 mt-1 flex items-center justify-between gap-1 pt-1 border-t border-black/5">
+              <div className="flex -space-x-1.5 items-center">
+                {shoot.crewNames && shoot.crewNames.length > 0 ? (
+                  <>
+                    {shoot.crewNames.slice(0, 3).map((name, i) => (
+                      <div
+                        key={i}
+                        title={name}
+                        className="grid size-5 place-items-center rounded-full bg-ink text-[8px] font-black text-white ring-1 ring-white/80 shrink-0"
+                      >
+                        {name.charAt(0).toUpperCase()}
+                      </div>
+                    ))}
+                    {shoot.crewNames.length > 3 ? (
+                      <span className="grid size-5 place-items-center rounded-full bg-surface text-[8px] font-black text-ink ring-1 ring-stroke shrink-0">
+                        +{shoot.crewNames.length - 3}
+                      </span>
+                    ) : null}
+                  </>
+                ) : (
+                  <span className="text-[9px] font-bold opacity-60 leading-none">Chưa xếp ekip</span>
+                )}
+              </div>
+
+              <span
+                className={cn(
+                  "size-2 rounded-full shrink-0",
+                  shoot.status === "confirmed"
+                    ? "bg-[#1da875]"
+                    : shoot.status === "cancelled"
+                    ? "bg-error"
+                    : "bg-[#e59b00]"
+                )}
+                title={shoot.status}
+              />
+            </div>
+          </>
+        )}
       </Link>
     </div>
   );

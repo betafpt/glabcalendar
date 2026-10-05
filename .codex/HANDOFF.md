@@ -7,6 +7,16 @@ Improve navigation performance across all meaningful G.Lab Calendar pages withou
 All Phase milestones for Fluid Responsive Layout, Google Calendar Auto-Pull, Week Timeline 7am-9pm Expansion, and Week Shoot Card Typography Anti-Clipping have been completed, verified with all quality gates (typecheck 0 errors, 200/200 tests passing, lint clean, build 18/18 routes clean), and deployed to production at https://calendar.geelab.vn.
 
 ## Completed
+- **Week Timeline Zero-Scroll Viewport Locking, Sticky Matrix & Density Switcher (05/10/2026)**:
+  - **Issue Resolved**: The week timeline previously rendered hours at their natural height, causing the desktop browser window to vertically stretch and scroll. Surrounding UI (rail, header, context panel) scrolled out of view, and users could not adjust hour slot density.
+  - **Implementation**:
+    - **Shell & Layout (`src/components/app-shell.tsx`, `src/app/calendar/page.tsx`)**: Locked desktop viewport on `/calendar` with `lg:h-screen lg:max-h-screen lg:overflow-hidden`. Context panel scrolls independently with `overflow-y-auto`. Calendar panel flex-stretches to remaining viewport height (`min-h-0 h-full`).
+    - **Timeline Scroll Container (`src/components/calendar/calendar-timeline-week.tsx`)**: Made `.timeline-scroll-area` the exclusive vertical scroll container (`overflow-y: auto`).
+    - **Sticky Matrix**: Day headers sticky to top (`sticky top-0 z-30`), time markers sticky to left (`sticky left-0 z-20`), top-left corner sticky both ways (`sticky top-0 left-0 z-40`).
+    - **Density Controls**: Added toolbar switcher `Gọn | Chuẩn | Rộng` (40px/hr, 56px/hr, 80px/hr) persisted in `localStorage` (`glab_timeline_density`). Adaptive shoot card rendering for compact heights.
+    - **Smart Auto-Scroll**: Smoothly scrolls to current time on current week (unless user already scrolled), or to 08:00 on other weeks. "Hiện tại" button returns to current week and re-centers on current time.
+  - **Verification**: Backups created in `.ui-backups/`. Typecheck PASS (0 errors), 200/200 unit tests PASS, lint clean, build PASS (18/18 routes). Verified via browser at 1440×900: zero outer scroll, smooth internal scroll, responsive density switching.
+
 - **Shoot Card Typography & Layout Polish / Anti-Clipping (05/10/2026 - Commit `a4d76fa`)**:
   - **Issue Resolved**: 1-hour shoot cards on week timeline with 2-line wrapped titles had the top header `G.LAB SHOOT` sliced/clipped by the card's rounded top border due to flexbox `justify-between` pushing items upward past container padding when inner height was constrained.
   - **Implementation (`src/components/calendar/calendar-timeline-week.tsx`)**:

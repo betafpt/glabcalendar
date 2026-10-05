@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
 import { BottomNavigation } from "@/components/production/bottom-navigation";
 import { LanguageSwitcher } from "@/components/ui/language-switcher";
 import {
@@ -16,6 +17,7 @@ import {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const isCalendar = pathname === "/calendar" || pathname.startsWith("/calendar");
 
   if (pathname === "/login") {
     return (
@@ -38,11 +40,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="min-h-screen bg-bg text-ink">
+    <div className={cn("min-h-screen bg-bg text-ink", isCalendar && "lg:h-screen lg:max-h-screen lg:overflow-hidden")}>
       {/* Outer workspace: fluid responsive layout without rigid max-width */}
-      <div className="app-shell-container">
+      <div className={cn("app-shell-container", isCalendar && "lg:h-full lg:overflow-hidden")}>
         {/* CSS grid: 110px icon rail, fluid gap, fluid main content */}
-        <div className="lg:app-shell-grid lg:min-h-screen">
+        <div className={cn("lg:app-shell-grid lg:min-h-screen", isCalendar && "lg:h-full lg:min-h-0 lg:overflow-hidden")}>
           {/* Icon Rail: 110px width, blends into canvas */}
           <aside className="hidden w-[110px] border-r border-black/[0.04] bg-transparent py-7 lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:items-center lg:justify-between">
             {/* Top: G.Lab Round Logo Monogram */}
@@ -103,7 +105,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </aside>
 
           {/* Main Content Area */}
-          <div className="min-w-0 flex-1 py-4 sm:py-6">
+          <div className={cn("min-w-0 flex-1 py-4 sm:py-6", isCalendar && "lg:py-3.5 lg:h-full lg:min-h-0 lg:flex lg:flex-col lg:overflow-hidden")}>
             {children}
           </div>
         </div>

@@ -373,3 +373,42 @@ Mọi thành phần giao diện mới được xây dựng **bắt buộc import
   - Build: 18/18 routes PASS.
   - Visual verification: Thẻ hiển thị sắc nét, đủ lề và cân đối.
   - Đã deploy lên production `calendar.geelab.vn` tại commit `a4d76fa`.
+
+### 6.16. Khóa Chiều Cao Viewport, Cải Tiến Week Timeline Chống Cuộn Trang Toàn Cục, Sticky Matrix & Bộ Điều Khiển Mật Độ Giờ (05/10/2026):
+- **Bối cảnh & Vấn đề giải quyết:**
+  - Timeline hiển thị các khung giờ theo chiều cao tự nhiên khiến toàn bộ trang web (body / app shell) bị kéo dài cuộn dọc, làm rail sidebar, header và context panel trôi mất khi xem các khung giờ muộn.
+  - Người dùng không có cách thu nhỏ/phóng to tỷ lệ giờ theo nhu cầu (xem bao quát cả ngày hay tập trung vào khung giờ chi tiết).
+- **Giải pháp & Kiến trúc thực hiện:**
+  - **Khóa cuộn Desktop Viewport (`src/components/app-shell.tsx`, `src/app/calendar/page.tsx`):**
+    - Áp dụng `lg:h-screen lg:max-h-screen lg:overflow-hidden` trên desktop khi ở trang `/calendar`.
+    - Main container và Calendar Panel co giãn chiếm trọn chiều cao còn lại của màn hình (`height: 100%`, `min-height: 0`).
+    - Context panel sở hữu vùng cuộn độc lập `lg:h-full lg:min-h-0 lg:overflow-y-auto`.
+    - Triệt tiêu hoàn toàn scrollbar toàn trang ngoài ý muốn.
+  - **Vùng cuộn chuyên biệt `timeline-scroll-area` (`src/components/calendar/calendar-timeline-week.tsx`):**
+    - Chỉ vùng timeline mang class `timeline-scroll-area` được `overflow-y: auto`.
+  - **Sticky Matrix 2 chiều hoàn hảo:**
+    - Hàng tiêu đề 7 ngày (`05 T2`, `06 T3`,...): `sticky top-0 z-30 bg-white/95 backdrop-blur-md`, luôn cố định ở đỉnh khi cuộn dọc.
+    - Cột thời gian bên trái (`GMT+7`, `7 Am` – `9 Pm`): `sticky left-0 z-20 bg-white/95 backdrop-blur-sm`, luôn hiển thị khi cuộn ngang.
+    - Ô góc trái trên cùng (`GMT+7`): `sticky top-0 left-0 z-40 bg-white` không bao giờ bị đè lấp.
+  - **Bộ Điều Khiển Mật Độ Giờ (Density Switcher):**
+    - Bổ sung cụm chuyển đổi segmented pill trên toolbar: `Gọn | Chuẩn | Rộng`.
+      - **Gọn (`compact`):** 40px / giờ (xem trọn vẹn cả ngày từ 7 AM tới 9 PM trong 1 màn hình).
+      - **Chuẩn (`standard`):** 56px / giờ (mặc định cân bằng, thoáng đãng).
+      - **Rộng (`spacious`):** 80px / giờ (không gian thoải mái cho các sự kiện chi tiết).
+    - Lưu trạng thái mật độ đã chọn vào `localStorage` (`glab_timeline_density`) để duy trì trải nghiệm người dùng.
+    - Thẻ sự kiện thích ứng kích thước (Adaptive Shoot Card): tự động chuyển sang chế độ hiển thị 1 dòng khi chiều cao `< 50px`, 2 dòng khi `50px - 75px`, và hiển thị đầy đủ avatar ekip khi `>= 76px`.
+  - **Cơ chế Cuộn Thông Minh (Smart Auto-Scroll):**
+    - Khi xem tuần hiện tại: Tự động cuộn tới giờ hiện tại (trừ trường hợp người dùng đã chủ động cuộn).
+    - Khi duyệt sang tuần khác: Tự động cuộn mở tại mốc `08:00`.
+    - Nút `Hiện tại`: Đưa lịch về tuần hiện tại và đồng thời cuộn mượt tới vị trí giờ hiện tại.
+- **Tệp sao lưu backup:**
+  - `.ui-backups/src-components-calendar-calendar-timeline-week--20261005-173600.bak.tsx`
+  - `.ui-backups/src-app-calendar-page--20261005-173600.bak.tsx`
+  - `.ui-backups/src-components-app-shell--20261005-173600.bak.tsx`
+- **Kiểm thử & Nghiệm thu:**
+  - Typecheck: PASS 0 lỗi (`npx tsc --noEmit`).
+  - Unit tests: PASS 200/200 tests (34 test files).
+  - Lint: PASS clean (`npm run lint`).
+  - Next build: PASS 18/18 routes (`npm run build`).
+  - Playwright visual testing: Thử nghiệm thực tế tại độ phân giải 1440×900 xác nhận sidebar, header và context panel cố định 100%, timeline cuộn mượt mà độc lập, mật độ giờ và nút Hiện tại hoạt động chuẩn xác.
+
