@@ -705,7 +705,7 @@ function DroppableTimelineColumn({
                 position: "absolute",
                 top,
                 height,
-                minHeight: "78px",
+                minHeight: "96px",
                 maxHeight: `calc(100% - ${top} + 12px)`,
                 left,
                 width,
@@ -765,27 +765,28 @@ function DraggableTimelineShootCard({
       <Link
         href={`/shoots/${shoot.id}`}
         className={cn(
-          "group flex flex-col justify-between h-full rounded-[16px] p-2 sm:p-2.5 transition-all duration-fast hover:-translate-y-0.5 hover:shadow-soft active:scale-[0.98] overflow-hidden",
+          "group flex flex-col justify-between h-full rounded-[14px] sm:rounded-[16px] p-2 sm:px-2.5 sm:py-2 transition-all duration-fast hover:-translate-y-0.5 hover:shadow-soft active:scale-[0.98] overflow-hidden",
           tone,
           shoot.isPastOrCompleted && "opacity-60 grayscale-[25%]"
         )}
       >
-        {/* Project Name or Shoot Title */}
-        <p className="truncate text-[9px] font-black uppercase tracking-wider opacity-75">
-          {projectName || "G.Lab Shoot"}
-        </p>
+        {/* Project Name, Title, and Time Slot */}
+        <div className="min-w-0 flex flex-col justify-start">
+          <p className="truncate text-[9px] font-black uppercase tracking-wider opacity-75 leading-none mb-1">
+            {projectName || "G.Lab Shoot"}
+          </p>
 
-        <h4 className="mt-0.5 font-display text-[12px] font-black uppercase leading-tight tracking-tight line-clamp-2">
-          {shoot.title}
-        </h4>
+          <h4 className="font-display text-[11px] sm:text-[12px] font-black uppercase leading-[1.25] tracking-tight line-clamp-2">
+            {shoot.title}
+          </h4>
 
-        {/* Time slot */}
-        <p className="mt-0.5 text-[10px] font-extrabold opacity-75 tabular-nums">
-          {timeLabel}
-        </p>
+          <p className="mt-1 text-[10px] font-extrabold opacity-75 tabular-nums leading-none">
+            {timeLabel}
+          </p>
+        </div>
 
         {/* Crew Avatar Stack (Max 3 + "+N" badge - Reference-identical!) */}
-        <div className="mt-1 flex items-center justify-between gap-1 pt-1 border-t border-black/5">
+        <div className="shrink-0 mt-1 flex items-center justify-between gap-1 pt-1 border-t border-black/5">
           <div className="flex -space-x-1.5 items-center">
             {shoot.crewNames && shoot.crewNames.length > 0 ? (
               <>
@@ -805,7 +806,7 @@ function DraggableTimelineShootCard({
                 ) : null}
               </>
             ) : (
-              <span className="text-[9px] font-bold opacity-60">Chưa xếp ekip</span>
+              <span className="text-[9px] font-bold opacity-60 leading-none">Chưa xếp ekip</span>
             )}
           </div>
 
