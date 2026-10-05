@@ -338,3 +338,38 @@ Mọi thành phần giao diện mới được xây dựng **bắt buộc import
   - `npm run lint`: PASS 0 lỗi.
   - `npm run build`: PASS 100% (18/18 routes biên dịch thành công).
   - Screenshots lưu tại artifacts: `calendar_viewport_1440x900.png`, `calendar_viewport_1920x1080.png`, `calendar_viewport_2560x1440.png`, `calendar_viewport_3840x2160.png`.
+
+### 6.13. Tự Động Kéo Lịch Google Calendar & Nút Đồng Bộ Nhanh (05/10/2026 - Commit `99e9360`):
+- **Bối cảnh & Vấn đề giải quyết:** Sự kiện từ Google Calendar không tự động cập nhật sang G.Lab nếu người dùng không bấm đồng bộ thủ công trong trang settings.
+- **Giải pháp:**
+  - Triển khai cơ chế auto-pull ngầm an toàn tại `src/server/services/google-calendar-auto-pull.ts` có throttling (10 phút) để tránh lạm dụng hạn ngạch Google API.
+  - Tích hợp hook kiểm tra và đồng bộ tự động khi người dùng truy cập trang `/calendar`.
+  - Bổ sung nút Quick Sync trực quan trên top header (`src/components/calendar/calendar-quick-sync-button.tsx`) với animation xoay mượt mà, phản hồi toast và cập nhật tức thì.
+- **Kiểm thử:** 5 unit tests trong `src/server/services/google-calendar-auto-pull.test.ts` PASS 100%.
+
+### 6.14. Mở Rộng Khung Giờ Timeline (7 AM - 9 PM) & Định Vị Sự Kiện Chuẩn Xác Theo Giờ Thực Tế GMT+7 (05/10/2026 - Commit `7dc3662`):
+- **Bối cảnh & Vấn đề giải quyết:** 
+  - Khung giờ cũ (8 AM - 6 PM) quá hẹp, các buổi quay tối từ 6:00 PM đến 7:00 PM bị đẩy ra ngoài hoặc nằm sai vị trí giờ so với thực tế.
+  - Lỗi tính toán `getMinutesInDay` do lệch múi giờ khiến thẻ buổi quay 18:00 bị đặt ở đầu ngày thay vì đúng hàng 6 PM.
+- **Giải pháp:**
+  - Mở rộng trục timeline từ 8 AM - 6 PM (10 tiếng) lên 7 AM - 9 PM (14 tiếng), bao phủ toàn bộ ca quay sáng sớm và tối muộn.
+  - Tính toán offset thời gian theo múi giờ chỉ định (`timeZone` - mặc định `Asia/Ho_Chi_Minh` GMT+7) với công thức phần trăm chính xác trên tổng 840 phút.
+  - Xử lý các buổi quay kéo dài qua nhiều ngày (multi-day boundary clipping).
+  - Thuật toán gom cụm sự kiện trùng giờ (cluster layout) chia cột ngang mượt mà, không bị đè khuất nhau.
+- **Kiểm thử:** Typecheck PASS, build 18/18 routes PASS, vị trí thẻ 6:00 PM - 7:00 PM nằm chính xác tuyệt đối tại mốc hàng 6 PM.
+
+### 6.15. Khắc Phục Lỗi Cắt Xén Chữ Trên Thẻ Sự Kiện Timeline Tuần (05/10/2026 - Commit `a4d76fa`):
+- **Bối cảnh & Vấn đề giải quyết:** 
+  - Thẻ sự kiện 1 tiếng có chiều cao tối thiểu (`minHeight: 78px`). Khi kết hợp với `justify-between` trên 4 phần tử con (Tag dự án, Tiêu đề 2 dòng, Giờ quay, Ekip/Status), flexbox đẩy dòng đầu tiên `G.LAB SHOOT` sát mép trên.
+  - Thuộc tính `overflow-hidden` bo góc cong `rounded-[16px]` đã cắt xén mất một nửa chữ `G.LAB SHOOT` phía trên.
+- **Giải pháp:**
+  - Nhóm 3 phần tử thông tin (Tag dự án, Tiêu đề, Khung giờ) thành 1 khối duy nhất `<div className="min-w-0 flex flex-col justify-start">` với line-height chuẩn (`leading-none`, `leading-[1.25]`).
+  - Đặt phần chân thẻ (Ekip & chấm trạng thái) thành `shrink-0` ghim đáy thẻ.
+  - Tăng `minHeight` từ `78px` lên `96px` và tối ưu padding dọc `sm:py-2 sm:px-2.5`, đảm bảo cả thẻ ngắn lẫn tiêu đề dài 2 dòng đều có đủ không gian thở thoáng đãng, 100% chữ và icon hiển thị trọn vẹn không bị mép bo tròn cắt xén.
+- **Tệp sao lưu backup:** `.ui-backups/src-components-calendar-calendar-timeline-week--20261005-135400.bak.tsx`
+- **Kiểm thử & Triển khai:**
+  - Typecheck: 0 lỗi.
+  - Tests: 200/200 tests PASS (34 test files).
+  - Build: 18/18 routes PASS.
+  - Visual verification: Thẻ hiển thị sắc nét, đủ lề và cân đối.
+  - Đã deploy lên production `calendar.geelab.vn` tại commit `a4d76fa`.

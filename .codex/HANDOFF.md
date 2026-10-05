@@ -4,9 +4,33 @@
 Improve navigation performance across all meaningful G.Lab Calendar pages without regressing existing UI, CRUD, localization, scheduling, or conflict behavior.
 
 ## Current Phase
-Fluid Responsive Layout for Large Desktop / 2K / 4K Displays (05/10/2026) has been fully implemented, verified via automated multi-viewport testing, and passed all quality gates. The fixed `max-width: 1400px` app shell constraint was completely eradicated. The layout is now fully fluid according to CSS viewport: Icon Rail is locked to `110px`, Context Panel scales via `clamp(340px, 20vw, 380px)`, Main Calendar absorbs all remaining space via `minmax(0, 1fr)`, outer padding scales via `clamp(24px, 4vw, 96px)`, and vertical height scales via `min-height: calc(100vh - 140px)` (scaling to `calc(100vh - 160px)` at 4K). Playwright tests verified crisp rendering across 1440×900, 1920×1080, 2560×1440, and 3840×2160. `npx tsc --noEmit` and `npm run build` both pass with 0 errors.
+All Phase milestones for Fluid Responsive Layout, Google Calendar Auto-Pull, Week Timeline 7am-9pm Expansion, and Week Shoot Card Typography Anti-Clipping have been completed, verified with all quality gates (typecheck 0 errors, 200/200 tests passing, lint clean, build 18/18 routes clean), and deployed to production at https://calendar.geelab.vn.
 
 ## Completed
+- **Shoot Card Typography & Layout Polish / Anti-Clipping (05/10/2026 - Commit `a4d76fa`)**:
+  - **Issue Resolved**: 1-hour shoot cards on week timeline with 2-line wrapped titles had the top header `G.LAB SHOOT` sliced/clipped by the card's rounded top border due to flexbox `justify-between` pushing items upward past container padding when inner height was constrained.
+  - **Implementation (`src/components/calendar/calendar-timeline-week.tsx`)**:
+    - Grouped project tag, shoot title, and time slot into a unified container `<div className="min-w-0 flex flex-col justify-start">` with proper `leading-none` and `leading-[1.25]`.
+    - Pinned crew avatar stack and status dot to the bottom with `shrink-0`.
+    - Increased `minHeight` from `78px` to `96px` and tuned padding to `p-2 sm:px-2.5 sm:py-2`.
+  - **Verification & Deployment**: Backup created at `.ui-backups/src-components-calendar-calendar-timeline-week--20261005-135400.bak.tsx`. Typecheck PASS, unit tests (200/200) PASS, next build (18/18) PASS. Pushed to `origin/main` at commit `a4d76fa` and deployed to production.
+
+- **Timeline Hour Grid Expansion (7 AM - 9 PM) & Accurate Event Positioning (05/10/2026 - Commit `7dc3662`)**:
+  - **Issue Resolved**: 8 AM - 6 PM timeline missed early morning shoots and evening shoots (6 PM - 7 PM), and time-zone conversion bugs caused 6 PM shoots to be placed at the top of the column instead of the 6 PM row.
+  - **Implementation (`src/components/calendar/calendar-timeline-week.tsx`)**:
+    - Expanded timeline grid from 10 slots (8 AM - 6 PM) to 14 slots (7 AM - 9 PM, 840 total minutes).
+    - Calculated event offsets using target timeZone (`Asia/Ho_Chi_Minh` GMT+7) correctly.
+    - Handled multi-day boundary clipping and overlapping event clustering horizontally.
+  - **Verification & Deployment**: Typecheck PASS, build PASS. Events starting at 6:00 PM now align pixel-perfectly with the 6 PM hour grid line. Deployed to production.
+
+- **Google Calendar Auto-Pull & Quick Sync Button (05/10/2026 - Commit `99e9360`)**:
+  - **Issue Resolved**: Google Calendar events were not synchronizing automatically to G.Lab Calendar without manual intervention in settings.
+  - **Implementation**:
+    - Created `src/server/services/google-calendar-auto-pull.ts` with 10-minute safe throttling to avoid Google API quota exhaustion.
+    - Added auto-check hook when loading `/calendar`.
+    - Created `src/components/calendar/calendar-quick-sync-button.tsx` in top header with spinning animation and toast feedback.
+  - **Verification & Deployment**: 5 unit tests in `src/server/services/google-calendar-auto-pull.test.ts` PASS. Deployed to production.
+
 - **Large Desktop / 2K / 4K Fluid Responsive Layout (05/10/2026)**:
   - **Fluid App Shell & Grid Architecture (`src/app/globals.css`, `src/components/app-shell.tsx`)**: Removed rigid `max-w-[1400px]` wrapper. Introduced CSS variables `--app-shell-padding-inline: clamp(24px, 4vw, 96px)` (16px on mobile), `--app-shell-gap: clamp(24px, 2vw, 40px)`, `--app-rail-width: 110px`, and `--app-context-width: clamp(340px, 20vw, 380px)`.
   - **Dynamic Calendar Workspace Grid (`src/app/calendar/page.tsx`, `src/components/calendar/calendar-context-panel.tsx`)**: Context panel fluidly adapts to `clamp(340px, 20vw, 380px)` and remains sticky on desktop (`lg:sticky lg:top-4`).
@@ -337,4 +361,4 @@ Earlier invalid benchmark runs showed multi-second spikes because the sandbox bl
   - Remaining lower-priority cleanup: raw `<img>` warnings in Crew, Equipment, Projects and `image-upload-field.tsx`.
 
 ## Last Updated
-2026-10-04T02:20:00+07:00
+2026-10-05T14:25:00+07:00
