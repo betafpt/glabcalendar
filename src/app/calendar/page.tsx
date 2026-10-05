@@ -7,6 +7,10 @@ import { WorkspaceMenu } from "@/components/production/workspace-menu";
 import { CalendarSearchTrigger } from "@/components/calendar/calendar-search-trigger";
 import { CalendarMonthDnd } from "@/components/calendar/calendar-month-dnd";
 import { CalendarWeekDnd } from "@/components/calendar/calendar-week-dnd";
+import { CalendarContextPanel } from "@/components/calendar/calendar-context-panel";
+import { CalendarTopHeader } from "@/components/calendar/calendar-top-header";
+import { CalendarTimelineWeek } from "@/components/calendar/calendar-timeline-week";
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { CalendarViewTransition } from "@/components/ui/motion-container";
 import { LocalizedDateTime } from "@/components/ui/localized-date-time";
 import { DEFAULT_APP_TIMEZONE, getServerConfig } from "@/lib/config";
@@ -49,6 +53,12 @@ type PageData = {
   equipment: Array<{ id: string; name: string }>;
   timezone: string;
   shootCrewMap?: Record<string, string[]>;
+  attentionData?: {
+    totalConflicts: number;
+    conflictsList: Array<{ shootTitle: string; note: string }>;
+    pendingChecklistCount: number;
+    checklistItems: Array<{ id: string; title: string; shootTitle: string; completed: boolean }>;
+  };
   error?: string;
 };
 
@@ -134,7 +144,7 @@ function getWeekDays(anchor: Date, timeZone: string): Date[] {
 }
 
 function safeView(value?: string): CalendarView {
-  return value === "week" || value === "day" ? value : "month";
+  return value === "month" || value === "day" ? value : "week";
 }
 
 function safeDate(value?: string) {
@@ -359,6 +369,32 @@ async function loadData(
       }
     }
 
+    const attentionData = {
+      totalConflicts: 0,
+      conflictsList: [] as Array<{ shootTitle: string; note: string }>,
+      pendingChecklistCount: 0,
+      checklistItems: [] as Array<{ id: string; title: string; shootTitle: string; completed: boolean }>,
+    };
+
+    if (shoots.length > 0) {
+      try {
+        const { createChecklistRepository } = await import("@/server/db/checklists");
+        const checklistRepo = createChecklistRepository(db);
+        const shootIds = shoots.map((s) => s.id);
+        const items = await checklistRepo.listForShoots(organization.id, shootIds);
+        const pending = items.filter((i) => !i.isCompleted);
+        attentionData.pendingChecklistCount = pending.length;
+        attentionData.checklistItems = pending.map((i) => ({
+          id: i.id,
+          title: i.title,
+          shootTitle: shoots.find((s) => s.id === i.shootId)?.title || "Lịch quay",
+          completed: i.isCompleted,
+        }));
+      } catch {
+        // Fallback gracefully
+      }
+    }
+
     const formattedShoots = shoots.map((s) => {
       let displayTitle = s.title;
       if (s.isTestData) {
@@ -369,7 +405,13 @@ async function loadData(
       return { ...s, title: displayTitle };
     });
 
-    return { shoots: formattedShoots, ...filterOptions, timezone: organization.timezone, shootCrewMap };
+    return {
+      shoots: formattedShoots,
+      ...filterOptions,
+      timezone: organization.timezone,
+      shootCrewMap,
+      attentionData,
+    };
   } catch (error) {
     if (isRedirectError(error)) throw error;
     return {
@@ -536,560 +578,270 @@ export default async function CalendarPage({
     ? data.equipment.find((e) => e.id === equipmentItemId)
     : undefined;
 
+  // Calculate production metrics for top header
+  const todayShoots = data.shoots.filter((s) => {
+    const sStartKey = dateKey(s.startsAt, data.timezone);
+    const sEndKey = dateKey(s.endsAt, data.timezone);
+    return todayKey >= sStartKey && todayKey <= sEndKey;
+  });
+
+  let totalHoursCount = 0;
+  for (const s of (todayShoots.length > 0 ? todayShoots : data.shoots)) {
+    totalHoursCount += Math.max(0, toDate(s.endsAt).getTime() - toDate(s.startsAt).getTime()) / 3600000;
+  }
+  const totalHours = Math.round(totalHoursCount * 10) / 10;
+
+  const attention = data.attentionData || {
+    totalConflicts: 0,
+    conflictsList: [],
+    pendingChecklistCount: 0,
+    checklistItems: [],
+  };
+
+  const readinessRate =
+    attention.pendingChecklistCount === 0 && attention.totalConflicts === 0
+      ? 100
+      : Math.max(45, Math.round(100 - attention.pendingChecklistCount * 15 - attention.totalConflicts * 20));
+
+  const contextPanelShoots = data.shoots.map((s) => ({
+    id: s.id,
+    title: s.title,
+    startsAt: toDate(s.startsAt).toISOString(),
+    endsAt: toDate(s.endsAt).toISOString(),
+    status: s.status,
+    locationName: s.locationName,
+    locationAddress: s.locationAddress,
+    projectName: s.projectId ? projectMap.get(s.projectId) : undefined,
+    crewCount: data.shootCrewMap?.[s.id]?.length || 0,
+  }));
+
+  // Week days for week timeline view (with multi-day overlap support)
+  const weekTimelineDays = (view === "week" ? getWeekDays(anchor, data.timezone) : []).map((day, dayIndex) => {
+    const key = dateKey(day, data.timezone);
+    const isToday = key === todayKey;
+    const isAnchor = key === anchorKey;
+    const header = weekHeaders[dayIndex];
+    const dayParts = zonedDateParts(day, data.timezone);
+
+    // Multi-day overlap support: shoots overlapping this day
+    const dayShoots = data.shoots.filter((s) => {
+      const sStartKey = dateKey(s.startsAt, data.timezone);
+      const sEndKey = dateKey(s.endsAt, data.timezone);
+      return key >= sStartKey && key <= sEndKey;
+    });
+
+    return {
+      dateKey: key,
+      dayNumber: dayParts.day,
+      dayName: header.vi,
+      isToday,
+      isAnchor,
+      dayIso: day.toISOString(),
+      shoots: dayShoots.map((s) => ({
+        id: s.id,
+        title: s.title,
+        startsAt: toDate(s.startsAt).toISOString(),
+        endsAt: toDate(s.endsAt).toISOString(),
+        status: s.status,
+        isPastOrCompleted: isPastOrCompletedShoot(s, now),
+        projectId: s.projectId,
+        locationName: s.locationName,
+        crewNames: data.shootCrewMap?.[s.id] || [],
+      })),
+    };
+  });
+
   return (
-    <AppScreen className="max-w-[1180px] pb-40 pt-4 sm:pb-36 sm:pt-6 lg:pb-10 lg:pt-8">
-      {/* Top Header Bar */}
-      <header className="mx-auto max-w-[1040px]">
-        <div className="flex items-center justify-between gap-2 pr-12 sm:pr-14 lg:pr-0">
-          <Link
-            href={queryHref("month", anchor, cleanParams, data.timezone)}
-            className="group inline-flex h-9 sm:h-10 items-center gap-1.5 rounded-pill border border-stroke/80 bg-surface/90 px-3 text-xs sm:text-sm font-black tracking-[-0.02em] text-ink shadow-soft transition-all duration-fast hover:bg-white active:scale-press"
-          >
-            <LocalizedText vi={monthLabelsObj.vi} en={monthLabelsObj.en} />
-            <span className="text-[10px] sm:text-xs text-secondary group-hover:text-ink transition-colors">
-              ⌄
-            </span>
-          </Link>
+    <div className="w-full pb-32 pt-1 sm:pb-24 lg:pb-8">
+      {/* 1. TOP HEADER (Góc trái: G.Lab Calendar *, Giữa: [Ngày | Tuần | Tháng] với Tuần active, Phải: controls) */}
+      <CalendarTopHeader
+        view={view}
+        anchor={anchor}
+        cleanParams={cleanParams}
+        totalHours={totalHours}
+        readinessRate={readinessRate}
+        searchShoots={data.shoots.map((s) => ({
+          id: s.id,
+          title: s.title,
+          status: s.status,
+          startsAt: toDate(s.startsAt).toISOString(),
+          endsAt: toDate(s.endsAt).toISOString(),
+          locationName: s.locationName,
+          locationAddress: s.locationAddress,
+          projectId: s.projectId,
+          projectName: s.projectId ? projectMap.get(s.projectId) : undefined,
+          crewNames: data.shootCrewMap?.[s.id] || [],
+        }))}
+        projectMap={Object.fromEntries(projectMap.entries())}
+        timezone={data.timezone}
+        hasActiveFilters={hasActiveFilters}
+      />
 
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <CalendarSearchTrigger
-              shoots={data.shoots.map((s) => ({
-                id: s.id,
-                title: s.title,
-                status: s.status,
-                startsAt: toDate(s.startsAt).toISOString(),
-                endsAt: toDate(s.endsAt).toISOString(),
-                locationName: s.locationName,
-                locationAddress: s.locationAddress,
-                projectId: s.projectId,
-                projectName: s.projectId ? projectMap.get(s.projectId) : undefined,
-                crewNames: data.shootCrewMap?.[s.id] || [],
-              }))}
-              projectMap={Object.fromEntries(projectMap.entries())}
-              timezone={data.timezone}
-            />
-
-            <a
-              href="#calendar-filters"
-              aria-label="Filter calendar"
-              className={`relative grid size-11 place-items-center rounded-full border border-stroke/70 bg-surface text-ink shadow-soft transition-all duration-fast hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 active:scale-press ${
-                hasActiveFilters ? "ring-2 ring-pink ring-offset-1" : ""
-              }`}
-            >
-              <Icon name="filter" />
-              {hasActiveFilters ? (
-                <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-pink ring-2 ring-white" />
-              ) : null}
-            </a>
-
-            <Link
-              href="/shoots"
-              aria-label="Create shoot"
-              className="group grid size-11 place-items-center rounded-full bg-ink text-white shadow-soft transition-all duration-fast hover:bg-ink/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink focus-visible:ring-offset-2 active:scale-press"
-            >
-              <Icon name="plus" />
-            </Link>
-            <WorkspaceMenu />
-          </div>
-        </div>
-
-        {/* Title and Editorial Subheading */}
-        <div className="mt-2.5 sm:mt-3 flex flex-wrap items-baseline justify-between gap-2">
-          <div>
-            <h1 className="font-display text-[clamp(2.6rem,10.5vw,5.2rem)] font-black uppercase leading-[0.82] tracking-[-0.06em] text-ink break-words">
-              {view === "week" ? (
-                <LocalizedText vi="Tuần" en="Week" />
-              ) : view === "day" ? (
-                <LocalizedText vi="Ngày" en="Day" />
-              ) : (
-                <LocalizedText vi="Tháng" en="Month" />
-              )}
-              <span className="ml-0.5 text-pink">*</span>
-            </h1>
-            <p className="mt-1.5 text-[10px] font-extrabold uppercase tracking-[0.28em] text-secondary sm:text-xs">
-              <LocalizedText vi="Lịch sản xuất" en="Production Calendar" />
-            </p>
-          </div>
-
-          {/* Quick Month Metrics Badge */}
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-pill border border-stroke/80 bg-white/70 px-3 py-1.5 text-[11px] font-black text-ink shadow-soft backdrop-blur-sm sm:text-xs">
-              <span className="size-2 rounded-full bg-pink" />
-              <span>
-                {data.shoots.length}{" "}
-                <LocalizedText vi="buổi quay" en="shoots" />
-              </span>
-            </span>
-          </div>
-        </div>
-
-        {/* Navigation Toolbar: Previous, Today, Next & Segmented View Controls */}
-        <div className="mt-4 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <Link
-              href={queryHref(view, previous, cleanParams, data.timezone)}
-              aria-label="Previous period"
-              className="grid size-11 shrink-0 place-items-center rounded-full border border-stroke/70 bg-surface text-ink shadow-soft transition-all duration-fast hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 active:scale-press"
-            >
-              <span className="rotate-180">
-                <Icon name="arrow" />
-              </span>
-            </Link>
-
-            <Link
-              href={queryHref(view, new Date(), cleanParams, data.timezone)}
-              className={`inline-flex min-h-11 items-center rounded-pill border px-4 text-[11px] sm:text-xs font-black tracking-tight shadow-soft transition-all duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 active:scale-press ${
-                isViewingCurrentPeriod
-                  ? "border-pink/40 bg-pink/10 text-pink"
-                  : "border-stroke/70 bg-surface text-ink hover:bg-white"
-              }`}
-            >
-              <LocalizedText vi="Hôm nay" en="Today" />
-            </Link>
-
-            <Link
-              href={queryHref(view, next, cleanParams, data.timezone)}
-              aria-label="Next period"
-              className="grid size-11 shrink-0 place-items-center rounded-full border border-stroke/70 bg-surface text-ink shadow-soft transition-all duration-fast hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 active:scale-press"
-            >
-              <Icon name="arrow" />
-            </Link>
-          </div>
-
-          <div className="flex items-center justify-between gap-2 sm:justify-end">
-            <div className="grid min-w-0 flex-1 sm:flex-initial sm:w-64 grid-cols-3 rounded-pill border border-stroke/70 bg-white/70 p-0.5 sm:p-1 shadow-soft">
-              {viewItems.map((item) => (
-                <Link
-                  key={item.view}
-                  href={queryHref(
-                    item.view,
-                    anchor,
-                    cleanParams,
-                    data.timezone,
-                  )}
-                  className={`grid min-h-8 sm:min-h-9 min-w-0 place-items-center rounded-pill px-1.5 sm:px-3 text-[11px] font-black transition-all duration-fast sm:text-xs truncate ${
-                    view === item.view
-                      ? "bg-ink text-white shadow-sm"
-                      : "text-secondary hover:text-ink"
-                  }`}
-                >
-                  <LocalizedText vi={item.vi} en={item.en} />
-                </Link>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Formatted Period Subtitle */}
-        <div className="mt-2.5 flex items-center justify-center">
-          <p className="inline-flex items-center gap-2 rounded-pill bg-surface/70 px-3.5 py-1 text-center text-xs font-black tracking-tight text-ink border border-stroke/50 shadow-soft sm:text-sm">
-            <span className="size-1.5 rounded-full bg-pink" />
-            <LocalizedText vi={periodObj.vi} en={periodObj.en} />
-          </p>
-        </div>
-
-        {/* Active Filter Chips */}
-        {hasActiveFilters ? (
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
-            <span className="text-[10px] font-black uppercase tracking-wider text-secondary">
-              <LocalizedText vi="Đang lọc:" en="Filtered by:" />
-            </span>
-            {projectId ? (
-              <span className="inline-flex items-center gap-1 rounded-pill bg-pink/10 border border-pink/25 px-2.5 py-0.5 text-[10px] font-black text-pink">
-                <span>{selectedProject?.name || <LocalizedText vi="Dự án đã chọn" en="Selected project" />}</span>
-                <Link
-                  href={queryHref(
-                    view,
-                    anchor,
-                    { ...cleanParams, projectId: undefined },
-                    data.timezone,
-                  )}
-                  className="hover:opacity-70 font-bold"
-                  aria-label="Remove project filter"
-                >
-                  ×
-                </Link>
-              </span>
-            ) : null}
-            {crewMemberId ? (
-              <span className="inline-flex items-center gap-1 rounded-pill bg-pink/10 border border-pink/25 px-2.5 py-0.5 text-[10px] font-black text-pink">
-                <span>{selectedCrew?.name || <LocalizedText vi="Nhân sự đã chọn" en="Selected crew" />}</span>
-                <Link
-                  href={queryHref(
-                    view,
-                    anchor,
-                    { ...cleanParams, crewMemberId: undefined },
-                    data.timezone,
-                  )}
-                  className="hover:opacity-70 font-bold"
-                  aria-label="Remove crew filter"
-                >
-                  ×
-                </Link>
-              </span>
-            ) : null}
-            {equipmentItemId ? (
-              <span className="inline-flex items-center gap-1 rounded-pill bg-pink/10 border border-pink/25 px-2.5 py-0.5 text-[10px] font-black text-pink">
-                <span>{selectedGear?.name || <LocalizedText vi="Thiết bị đã chọn" en="Selected gear" />}</span>
-                <Link
-                  href={queryHref(
-                    view,
-                    anchor,
-                    { ...cleanParams, equipmentItemId: undefined },
-                    data.timezone,
-                  )}
-                  className="hover:opacity-70 font-bold"
-                  aria-label="Remove gear filter"
-                >
-                  ×
-                </Link>
-              </span>
-            ) : null}
-            {includeTestData ? (
-              <span className="inline-flex items-center gap-1 rounded-pill bg-[#e59b00]/15 border border-[#e59b00]/30 px-2.5 py-0.5 text-[10px] font-black text-[#b45309]">
-                <span>
-                  <LocalizedText vi="Dữ liệu test: Đang hiện" en="Test data: Visible" />
-                </span>
-                <Link
-                  href={queryHref(
-                    view,
-                    anchor,
-                    { ...cleanParams, includeTestData: undefined },
-                    data.timezone,
-                  )}
-                  className="hover:opacity-70 font-bold"
-                  aria-label="Hide test data"
-                >
-                  ×
-                </Link>
-              </span>
-            ) : null}
-            <Link
-              href={queryHref(view, anchor, {}, data.timezone)}
-              className="text-[10px] font-black text-secondary hover:text-ink underline ml-1"
-            >
-              <LocalizedText vi="Xóa tất cả" en="Clear all" />
-            </Link>
-          </div>
-        ) : null}
-      </header>
-
-      {/* Database Error Banner */}
-      {data.error ? (
-        <div className="mx-auto mt-4 max-w-[1040px]">
-          <DatabaseErrorBanner error={data.error} />
-        </div>
-      ) : null}
-
-      {/* Filter Empty State Banner */}
-      {hasActiveFilters && data.shoots.length === 0 && !data.error ? (
-        <div className="mx-auto mt-4 max-w-[1040px] rounded-r22 border border-dashed border-ink/20 bg-surface/90 p-4 sm:p-5 text-center shadow-soft">
-          <p className="font-display text-lg sm:text-xl font-black uppercase tracking-tight text-ink">
-            <LocalizedText
-              vi="Không có buổi quay phù hợp"
-              en="No matching shoots found"
-            />
-          </p>
-          <p className="mt-1 text-xs sm:text-sm font-medium text-secondary">
-            <LocalizedText
-              vi="Không tìm thấy buổi quay nào phù hợp với bộ lọc đã chọn trong khoảng thời gian này."
-              en="No shoots match the selected filters in this time range."
-            />
-          </p>
-          <div className="mt-3">
-            <Link
-              href={queryHref(view, anchor, {}, data.timezone)}
-              className="inline-flex h-8 sm:h-9 items-center rounded-pill bg-ink px-3.5 text-xs font-black text-white shadow-soft transition hover:bg-pink active:scale-press"
-            >
-              <LocalizedText vi="Xóa tất cả bộ lọc" en="Reset all filters" />
-            </Link>
-          </div>
-        </div>
-      ) : null}
-
-      {/* PRIMARY CALENDAR VIEW EXPERIENCE */}
-      <CalendarViewTransition viewKey={`${view}-${cleanParams.date ?? ""}`}>
-        {view === "month" ? (
-          <CalendarMonthDnd
-            days={monthGridDays.map((day) => {
-              const key = dateKey(day, data.timezone);
-              const shoots = grouped.get(key) ?? [];
-              const isToday = key === todayKey;
-              const dayParts = zonedDateParts(day, data.timezone);
-              const outsideMonth = dayParts.month !== anchorMonth;
-              return {
-                dateKey: key,
-                dayNumber: dayParts.day,
-                isToday,
-                outsideMonth,
-                dayIso: day.toISOString(),
-                shoots: shoots.map((s) => ({
-                  id: s.id,
-                  title: s.title,
-                  startsAt: s.startsAt.toISOString(),
-                  endsAt: s.endsAt.toISOString(),
-                  status: s.status,
-                  isPastOrCompleted: isPastOrCompletedShoot(s, now),
-                  projectId: s.projectId,
-                  locationName: s.locationName,
-                })),
-              };
-            })}
-            timezone={data.timezone}
-            todayKey={todayKey}
-            weekHeaders={weekHeaders}
-            cleanParams={cleanParams}
-          />
-        ) : view === "week" ? (
-        <CalendarWeekView
-          anchor={anchor}
-          data={data}
-          searchParams={cleanParams}
-          projectMap={projectMap}
-          todayKey={todayKey}
-          anchorKey={anchorKey}
-          weekDaysList={weekDaysList}
-          grouped={grouped}
-        />
-      ) : (
-        <CalendarDayTimelineView
-          anchor={anchor}
-          data={data}
-          searchParams={cleanParams}
-          projectMap={projectMap}
-          todayKey={todayKey}
-          anchorKey={anchorKey}
-          now={now}
-        />
-      )}
-      </CalendarViewTransition>
-
-      {/* Visual Accent Legend Bar */}
-      <div className="mx-auto mt-4 sm:mt-5 flex max-w-[1040px] items-center gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-2">
-        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-pill border border-stroke/70 bg-surface/80 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-[0.1em] text-secondary shadow-soft sm:px-3 sm:py-2 sm:text-xs">
-          <LocalizedText vi="Tông màu trực quan" en="Visual Accents" />
-        </span>
-        {[
-          ["bg-[#7a58ec]", "Lilac", "Tím nhạt"],
-          ["bg-[#1da875]", "Mint", "Bạc hà"],
-          ["bg-[#e59b00]", "Yellow", "Vàng"],
-          ["bg-[#2d7bf4]", "Sky", "Xanh trời"],
-          ["bg-[#ff4f9a]", "Coral", "San hô"],
-        ].map(([dot, en, vi]) => (
-          <span
-            key={en}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-pill border border-stroke/70 bg-surface/80 px-2.5 py-1.5 text-[10px] font-black text-ink shadow-soft sm:px-3 sm:py-2 sm:text-xs"
-          >
-            <span className={`size-2 rounded-full ${dot}`} />
-            <LocalizedText vi={vi} en={en} />
+      {/* Mobile Drawer Trigger for Left Context Panel (Reference Column 2 on Mobile) */}
+      <div className="lg:hidden flex items-center justify-between p-3 rounded-2xl bg-white/80 border border-black/[0.05] shadow-xs my-3">
+        <div className="flex items-center gap-2">
+          <Calendar size={18} className="text-pink" />
+          <span className="text-xs font-black text-ink uppercase tracking-wider">
+            Lịch nhỏ & Tóm tắt
           </span>
-        ))}
-        <span className="inline-flex shrink-0 items-center rounded-pill border border-stroke/50 bg-white/50 px-2.5 py-1.5 text-[10px] font-bold text-secondary shadow-soft sm:px-3 sm:py-2 sm:text-xs">
-          <LocalizedText
-            vi="Xoay vòng theo lịch để phân biệt các buổi quay"
-            en="Rotated cyclically to distinguish scheduled shoots"
-          />
-        </span>
+        </div>
+        <Sheet>
+          <SheetTrigger className="rounded-full bg-ink text-white px-3.5 py-1.5 text-[11px] font-black shadow-soft active:scale-press">
+            Mở xem
+          </SheetTrigger>
+          <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-3xl border-t border-black/[0.06] p-4">
+            <SheetTitle className="sr-only">Lịch nhỏ và tóm tắt</SheetTitle>
+            <CalendarContextPanel
+              currentAnchor={anchor}
+              selectedDate={anchor}
+              timezone={data.timezone}
+              shoots={contextPanelShoots}
+              attentionData={attention}
+              cleanParams={cleanParams}
+            />
+          </SheetContent>
+        </Sheet>
       </div>
 
-      {/* Upcoming Shoots This Month */}
-      <section className="mx-auto mt-6 sm:mt-8 max-w-[1040px]">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-pink">
-              <LocalizedText vi="LỊCH TRÌNH" en="SCHEDULE" />
-            </p>
-            <h2 className="font-display text-xl sm:text-2xl font-black uppercase tracking-[-0.04em] text-ink">
-              <LocalizedText
-                vi="Sắp tới trong tháng"
-                en="Upcoming this month"
-              />
-              <span className="text-pink">*</span>
-            </h2>
-          </div>
-
-          <Link
-            href="/shoots"
-            className="inline-flex h-8 sm:h-9 items-center gap-1 rounded-pill border border-stroke/70 bg-surface px-3 text-[10px] font-black text-ink shadow-soft transition hover:bg-white active:scale-press sm:text-xs"
-          >
-            <LocalizedText vi="Xem tất cả" en="View all" />
-            <Icon name="arrow" />
-          </Link>
+      {/* 2. MAIN 2-COLUMN WORKSPACE: CONTEXT PANEL + FLUID GAP + MAIN CALENDAR */}
+      <div className="mt-4 flex flex-col gap-6 lg:calendar-workspace-grid lg:items-start">
+        {/* VÙNG 2: LEFT CONTEXT PANEL (Fluid clamp(340px, 20vw, 380px) column, sticky on desktop) */}
+        <div className="hidden lg:block w-full shrink-0 lg:sticky lg:top-4">
+          <CalendarContextPanel
+            currentAnchor={anchor}
+            selectedDate={anchor}
+            timezone={data.timezone}
+            shoots={contextPanelShoots}
+            attentionData={attention}
+            cleanParams={cleanParams}
+          />
         </div>
 
-        {upcoming.length ? (
-          <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-            {upcoming.map((shoot, index) => (
+        {/* VÙNG 3: MAIN CALENDAR (Focal point chính bắt đầu cùng hàng với context panel) */}
+        <div className="min-w-0 flex-1 space-y-3">
+          {/* Database Error Banner */}
+          {data.error ? <DatabaseErrorBanner error={data.error} /> : null}
+
+          {/* Active Filter Chips */}
+          {hasActiveFilters ? (
+            <div className="flex flex-wrap items-center gap-1.5 rounded-[16px] bg-white/70 p-2.5 border border-black/[0.05] shadow-xs">
+              <span className="text-[10px] font-black uppercase tracking-wider text-secondary">
+                <LocalizedText vi="Đang lọc:" en="Filtered by:" />
+              </span>
+              {projectId ? (
+                <span className="inline-flex items-center gap-1 rounded-pill bg-pink/10 border border-pink/25 px-2.5 py-0.5 text-[10px] font-black text-pink">
+                  <span>{selectedProject?.name || "Dự án đã chọn"}</span>
+                  <Link
+                    href={queryHref(view, anchor, { ...cleanParams, projectId: undefined }, data.timezone)}
+                    className="hover:opacity-70 font-bold"
+                  >
+                    ×
+                  </Link>
+                </span>
+              ) : null}
+              {crewMemberId ? (
+                <span className="inline-flex items-center gap-1 rounded-pill bg-pink/10 border border-pink/25 px-2.5 py-0.5 text-[10px] font-black text-pink">
+                  <span>{selectedCrew?.name || "Nhân sự đã chọn"}</span>
+                  <Link
+                    href={queryHref(view, anchor, { ...cleanParams, crewMemberId: undefined }, data.timezone)}
+                    className="hover:opacity-70 font-bold"
+                  >
+                    ×
+                  </Link>
+                </span>
+              ) : null}
+              {equipmentItemId ? (
+                <span className="inline-flex items-center gap-1 rounded-pill bg-pink/10 border border-pink/25 px-2.5 py-0.5 text-[10px] font-black text-pink">
+                  <span>{selectedGear?.name || "Thiết bị đã chọn"}</span>
+                  <Link
+                    href={queryHref(view, anchor, { ...cleanParams, equipmentItemId: undefined }, data.timezone)}
+                    className="hover:opacity-70 font-bold"
+                  >
+                    ×
+                  </Link>
+                </span>
+              ) : null}
               <Link
-                key={shoot.id}
-                href={`/shoots/${shoot.id}`}
-                className={`grid min-h-24 grid-cols-[56px_minmax(0,1fr)] sm:grid-cols-[64px_minmax(0,1fr)] gap-3 rounded-r22 p-3 sm:p-3.5 transition-all duration-base hover:-translate-y-0.5 hover:shadow-soft active:scale-[0.99] ${
-                  eventTones[index % eventTones.length]
-                } ${isPastOrCompletedShoot(shoot, now) ? "opacity-45 grayscale-[35%]" : ""}`}
+                href={queryHref(view, anchor, {}, data.timezone)}
+                className="text-[10px] font-black text-secondary hover:text-ink underline ml-1"
               >
-                <div className="flex flex-col justify-center border-r border-ink/10 pr-2 sm:pr-3 text-center">
-                  <span className="text-[9px] sm:text-[10px] font-black uppercase text-ink/75">
-                    {new Intl.DateTimeFormat("en", {
-                      timeZone: data.timezone,
-                      month: "short",
-                    }).format(shoot.startsAt)}
-                  </span>
-                  <span className="font-display text-2xl sm:text-3xl font-black leading-none text-ink">
-                    {new Intl.DateTimeFormat("en", {
-                      timeZone: data.timezone,
-                      day: "numeric",
-                    }).format(shoot.startsAt)}
-                  </span>
-                </div>
-                <div className="min-w-0 self-center">
-                  {shoot.projectId && projectMap.get(shoot.projectId) ? (
-                    <p className="truncate text-[9px] font-black uppercase tracking-wider text-ink/65">
-                      {projectMap.get(shoot.projectId)}
-                    </p>
-                  ) : null}
-                  <p className="truncate text-xs font-black text-ink sm:text-sm">
-                    {shoot.title}
-                  </p>
-                  <p className="mt-0.5 truncate text-[10px] font-bold text-ink/75">
-                    {formatTime(shoot.startsAt, data.timezone)} —{" "}
-                    {formatTime(shoot.endsAt, data.timezone)}
-                  </p>
-                  {shoot.locationName ? (
-                    <p className="mt-0.5 truncate text-[9px] font-medium text-ink/60">
-                      ⌖ {shoot.locationName}
-                    </p>
-                  ) : null}
-                </div>
+                <LocalizedText vi="Xóa tất cả" en="Clear all" />
               </Link>
-            ))}
-          </div>
-        ) : (
-          <div className="mt-3 rounded-r22 border border-dashed border-stroke bg-surface/60 px-4 py-8 text-center text-xs font-bold text-secondary">
-            <LocalizedText
-              vi="Chưa có lịch quay sắp tới trong khoảng này."
-              en="No upcoming shoots in this range yet."
-            />
-          </div>
-        )}
-      </section>
+            </div>
+          ) : null}
 
-      {/* Calendar Filter Controls Accordion */}
-      <details
-        id="calendar-filters"
-        open={hasActiveFilters ? true : undefined}
-        className="mx-auto mt-5 sm:mt-7 max-w-[1040px] rounded-r24 sm:rounded-r28 border border-stroke bg-surface/90 p-3.5 sm:p-5 shadow-soft transition-all"
-      >
-        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-r12 text-xs font-black uppercase tracking-[0.14em] text-secondary hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2">
-          <span className="flex items-center gap-2">
-            <Icon name="filter" />
-            <LocalizedText vi="Bộ lọc lịch" en="Calendar filters" />
-            {hasActiveFilters ? (
-              <span className="rounded-pill bg-pink/15 px-2 py-0.5 text-[9px] font-black text-pink">
-                <LocalizedText vi="Đang lọc" en="Active" />
-              </span>
-            ) : null}
-          </span>
-          <span className="text-sm">⌄</span>
-        </summary>
-
-        <form action="/calendar" method="GET" className="mt-4 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
-          <input type="hidden" name="view" value={view} />
-          <input
-            type="hidden"
-            name="date"
-            value={dateKey(anchor, data.timezone)}
-          />
-
-          <select
-            name="projectId"
-            defaultValue={projectId ?? ""}
-            aria-label="Filter by project"
-            className="h-10 sm:h-11 w-full min-w-0 rounded-r16 border border-stroke bg-white px-3 text-xs sm:text-sm font-bold text-ink outline-none focus:border-ink/40 transition-colors"
-          >
-            <option value="">
-              <LocalizedText vi="Tất cả dự án" en="All projects" />
-            </option>
-            {data.projects.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            name="crewMemberId"
-            defaultValue={crewMemberId ?? ""}
-            aria-label="Filter by crew member"
-            className="h-10 sm:h-11 w-full min-w-0 rounded-r16 border border-stroke bg-white px-3 text-xs sm:text-sm font-bold text-ink outline-none focus:border-ink/40 transition-colors"
-          >
-            <option value="">
-              <LocalizedText vi="Tất cả nhân sự" en="All crew" />
-            </option>
-            {data.crew.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            name="equipmentItemId"
-            defaultValue={equipmentItemId ?? ""}
-            aria-label="Filter by equipment"
-            className="h-10 sm:h-11 w-full min-w-0 rounded-r16 border border-stroke bg-white px-3 text-xs sm:text-sm font-bold text-ink outline-none focus:border-ink/40 transition-colors"
-          >
-            <option value="">
-              <LocalizedText vi="Tất cả thiết bị" en="All gear" />
-            </option>
-            {data.equipment.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-
-          <button
-            type="submit"
-            className="h-10 sm:h-11 rounded-pill bg-ink px-4 text-xs sm:text-sm font-black text-white shadow-soft transition hover:bg-ink/90 active:scale-press"
-          >
-            <LocalizedText vi="Áp dụng" en="Apply" />
-          </button>
-
-          <Link
-            href={queryHref(view, anchor, {}, data.timezone)}
-            className="grid h-10 sm:h-11 place-items-center rounded-pill border border-stroke bg-white px-4 text-xs sm:text-sm font-black text-ink shadow-soft transition hover:bg-surface active:scale-press"
-          >
-            <LocalizedText vi="Xóa lọc" en="Clear" />
-          </Link>
-
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-stroke/50 pt-3 sm:col-span-2 lg:col-span-5">
-            <label className="flex items-center gap-2.5 cursor-pointer select-none text-xs font-bold text-ink">
-              <input
-                type="checkbox"
-                name="includeTestData"
-                value="true"
-                defaultChecked={includeTestData}
-                className="size-4 rounded accent-pink cursor-pointer"
+          {/* PRIMARY CALENDAR VIEW: WEEK TIMELINE (REFERENCE-IDENTICAL) / MONTH DND / DAY TIMELINE */}
+          <CalendarViewTransition viewKey={`${view}-${cleanParams.date ?? ""}`}>
+            {view === "week" ? (
+              <CalendarTimelineWeek
+                days={weekTimelineDays}
+                periodLabel={periodObj.vi}
+                timezone={data.timezone}
+                cleanParams={cleanParams}
+                projectMap={Object.fromEntries(projectMap.entries())}
+                onNavigatePrev={queryHref(view, previous, cleanParams, data.timezone)}
+                onNavigateNext={queryHref(view, next, cleanParams, data.timezone)}
+                onNavigateToday={queryHref(view, new Date(), cleanParams, data.timezone)}
+                isViewingCurrentPeriod={isViewingCurrentPeriod}
               />
-              <span>
-                <LocalizedText
-                  vi="Hiện dữ liệu test / loại trừ đồng bộ (Quản trị viên)"
-                  en="Show test & excluded data (Admin filter)"
-                />
-              </span>
-            </label>
-            <span className="text-[11px] font-medium text-secondary">
-              <LocalizedText
-                vi="Mặc định ẩn các lịch test, lịch cá nhân và sự kiện loại trừ."
-                en="Test events and excluded items are hidden by default."
+            ) : view === "month" ? (
+              <CalendarMonthDnd
+                days={monthGridDays.map((day) => {
+                  const key = dateKey(day, data.timezone);
+                  const shoots = data.shoots.filter((s) => {
+                    const sStartKey = dateKey(s.startsAt, data.timezone);
+                    const sEndKey = dateKey(s.endsAt, data.timezone);
+                    return key >= sStartKey && key <= sEndKey;
+                  });
+                  const isToday = key === todayKey;
+                  const dayParts = zonedDateParts(day, data.timezone);
+                  const outsideMonth = dayParts.month !== anchorMonth;
+                  return {
+                    dateKey: key,
+                    dayNumber: dayParts.day,
+                    isToday,
+                    outsideMonth,
+                    dayIso: day.toISOString(),
+                    shoots: shoots.map((s) => ({
+                      id: s.id,
+                      title: s.title,
+                      startsAt: s.startsAt.toISOString(),
+                      endsAt: s.endsAt.toISOString(),
+                      status: s.status,
+                      isPastOrCompleted: isPastOrCompletedShoot(s, now),
+                      projectId: s.projectId,
+                      locationName: s.locationName,
+                    })),
+                  };
+                })}
+                timezone={data.timezone}
+                todayKey={todayKey}
+                weekHeaders={weekHeaders}
+                cleanParams={cleanParams}
+                periodLabel={monthLabelsObj.vi}
+                onNavigatePrev={queryHref(view, previous, cleanParams, data.timezone)}
+                onNavigateNext={queryHref(view, next, cleanParams, data.timezone)}
+                onNavigateToday={queryHref(view, new Date(), cleanParams, data.timezone)}
+                isViewingCurrentPeriod={isViewingCurrentPeriod}
               />
-            </span>
-          </div>
-        </form>
-      </details>
-    </AppScreen>
+            ) : (
+              <CalendarDayTimelineView
+                anchor={anchor}
+                data={data}
+                searchParams={cleanParams}
+                projectMap={projectMap}
+                todayKey={todayKey}
+                anchorKey={anchorKey}
+                now={now}
+              />
+            )}
+          </CalendarViewTransition>
+        </div>
+      </div>
+    </div>
   );
 }
+
 
 function CalendarWeekView({
   anchor,
@@ -1114,9 +866,9 @@ function CalendarWeekView({
   const confirmedCount = data.shoots.filter((s) => s.status === "confirmed").length;
 
   return (
-    <section className="mx-auto mt-4 sm:mt-5 max-w-[1040px] overflow-hidden rounded-r24 sm:rounded-r28 border border-stroke/80 bg-white/60 p-2.5 sm:p-5 shadow-soft backdrop-blur-sm">
+    <section className="overflow-hidden rounded-[24px] border border-black/[0.05] bg-white p-4 sm:p-5 shadow-sm">
       {/* Week Overview Header Bar */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-stroke/70 pb-3 sm:pb-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-black/[0.05] pb-3 sm:pb-3.5">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-pink flex items-center gap-1.5">
             <span className="size-1.5 rounded-full bg-pink" />
@@ -1456,18 +1208,11 @@ function CalendarDayTimelineView({
   );
 
   return (
-    <section className="mx-auto mt-4 sm:mt-5 max-w-[1040px] overflow-hidden rounded-r24 sm:rounded-r28 border border-stroke/80 bg-white/60 p-3 sm:p-5 shadow-soft backdrop-blur-sm">
+    <section className="overflow-hidden rounded-[24px] border border-black/[0.05] bg-white p-4 sm:p-5 shadow-sm">
       {/* Day Header & Controls */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-stroke/70 pb-3 sm:pb-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-black/[0.05] pb-3 sm:pb-3.5">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-pink flex items-center gap-1.5">
-            <span className="size-1.5 rounded-full bg-pink animate-pulse" />
-            <LocalizedText
-              vi="LỊCH TRÌNH DÒNG THỜI GIAN"
-              en="PRODUCTION TIMELINE"
-            />
-          </p>
-          <h2 className="mt-0.5 font-display text-2xl sm:text-3xl lg:text-4xl font-black uppercase tracking-tight text-ink">
+          <h2 className="font-display text-xl sm:text-2xl font-black uppercase tracking-tight text-ink">
             <LocalizedDateTime
               value={anchor.toISOString()}
               options={{
@@ -1485,7 +1230,7 @@ function CalendarDayTimelineView({
         <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           <Link
             href={queryHref("week", anchor, searchParams, data.timezone)}
-            className="inline-flex h-8 sm:h-9 items-center gap-1 rounded-pill border border-stroke/70 bg-surface px-3 text-[11px] font-black text-ink shadow-soft transition hover:bg-white active:scale-press"
+            className="inline-flex h-8 sm:h-9 items-center gap-1 rounded-full border border-black/[0.06] bg-surface px-3 text-[11px] font-black text-ink shadow-xs transition hover:bg-white active:scale-press"
           >
             <Icon name="calendar" />
             <LocalizedText vi="Xem cả tuần" en="View week" />
@@ -1493,17 +1238,17 @@ function CalendarDayTimelineView({
 
           <Link
             href={queryHref("month", anchor, searchParams, data.timezone)}
-            className="inline-flex h-8 sm:h-9 items-center gap-1 rounded-pill border border-stroke/70 bg-surface px-3 text-[11px] font-black text-ink shadow-soft transition hover:bg-white active:scale-press"
+            className="inline-flex h-8 sm:h-9 items-center gap-1 rounded-full border border-black/[0.06] bg-surface px-3 text-[11px] font-black text-ink shadow-xs transition hover:bg-white active:scale-press"
           >
             <LocalizedText vi="Xem cả tháng" en="View month" />
           </Link>
 
           <Link
             href="/shoots"
-            className="inline-flex h-8 sm:h-9 items-center gap-1 rounded-pill bg-ink px-3.5 text-[11px] font-black text-white shadow-soft transition hover:bg-ink/90 active:scale-press"
+            className="inline-flex h-8 sm:h-9 items-center gap-1 rounded-full bg-ink px-3.5 text-[11px] font-black text-white shadow-soft transition hover:bg-pink active:scale-press"
           >
             <Icon name="plus" />
-            <LocalizedText vi="Tạo buổi quay" en="Create shoot" />
+            <LocalizedText vi="Tạo lịch quay" en="Create shoot" />
           </Link>
         </div>
       </div>

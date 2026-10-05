@@ -15,6 +15,11 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
+import {
+  ArrowLeft2,
+  ArrowRight2,
+  Add,
+} from "@/components/ui/iconsax";
 import { LocalizedText } from "@/components/ui/localized-text";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -56,6 +61,11 @@ type CalendarMonthDndProps = {
   todayKey: string;
   weekHeaders: Array<{ vi: string; en: string; isWeekend: boolean }>;
   cleanParams: Record<string, string | undefined>;
+  periodLabel?: string;
+  onNavigatePrev?: string;
+  onNavigateNext?: string;
+  onNavigateToday?: string;
+  isViewingCurrentPeriod?: boolean;
 };
 
 const eventTones = [
@@ -135,6 +145,11 @@ export function CalendarMonthDnd({
   todayKey,
   weekHeaders,
   cleanParams,
+  periodLabel,
+  onNavigatePrev,
+  onNavigateNext,
+  onNavigateToday,
+  isViewingCurrentPeriod,
 }: CalendarMonthDndProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -342,9 +357,65 @@ export function CalendarMonthDnd({
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <section className="mx-auto mt-4 sm:mt-5 max-w-[1040px] overflow-hidden rounded-r24 sm:rounded-r28 border border-stroke/80 bg-white/60 shadow-soft backdrop-blur-sm">
+        <section className="overflow-hidden rounded-[24px] border border-black/[0.05] bg-white p-4 sm:p-5 2xl:p-6 shadow-sm calendar-min-h flex flex-col">
+          {/* MONTH TOP TOOLBAR (Directly above grid) */}
+          {periodLabel ? (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-3.5 border-b border-black/[0.05] mb-4">
+              <div className="flex items-center gap-3">
+                <h3 className="font-display text-base sm:text-lg font-black tracking-tight text-ink">
+                  {periodLabel}
+                </h3>
+
+                {onNavigatePrev && onNavigateNext ? (
+                  <div className="flex items-center gap-1">
+                    <Link
+                      href={onNavigatePrev}
+                      title="Tháng trước"
+                      className="grid size-8 place-items-center rounded-full border border-black/[0.06] bg-surface text-ink shadow-xs hover:bg-white active:scale-press transition-all"
+                    >
+                      <ArrowLeft2 size={13} variant="Linear" />
+                    </Link>
+
+                    <Link
+                      href={onNavigateNext}
+                      title="Tháng sau"
+                      className="grid size-8 place-items-center rounded-full border border-black/[0.06] bg-surface text-ink shadow-xs hover:bg-white active:scale-press transition-all"
+                    >
+                      <ArrowRight2 size={13} variant="Linear" />
+                    </Link>
+                  </div>
+                ) : null}
+
+                {onNavigateToday ? (
+                  <Link
+                    href={onNavigateToday}
+                    className={cn(
+                      "inline-flex min-h-8 items-center rounded-full px-3 text-[11px] font-black transition-all duration-fast active:scale-press",
+                      isViewingCurrentPeriod
+                        ? "bg-pink text-white shadow-soft"
+                        : "bg-surface border border-black/[0.06] text-ink hover:bg-white"
+                    )}
+                  >
+                    <LocalizedText vi="Hôm nay" en="Today" />
+                  </Link>
+                ) : null}
+              </div>
+
+              {/* Primary Action Button "+ Tạo lịch quay" */}
+              <div className="flex items-center justify-end">
+                <Link
+                  href="/shoots"
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-ink px-4 text-xs font-black text-white shadow-soft transition-all duration-fast hover:bg-pink active:scale-press"
+                >
+                  <Add size={14} variant="Linear" />
+                  <span>Tạo lịch quay</span>
+                </Link>
+              </div>
+            </div>
+          ) : null}
+
           {/* Weekday Column Headers */}
-          <div className="grid grid-cols-7 border-b border-stroke/70 bg-surface/90 py-2 sm:py-2.5 text-center">
+          <div className="grid grid-cols-7 border-b border-black/[0.05] bg-transparent pb-2.5 text-center">
             {weekHeaders.map((day) => (
               <div
                 key={day.en}
@@ -481,12 +552,12 @@ function DroppableDayCell({
     <article
       ref={setNodeRef}
       className={cn(
-        "group relative flex flex-col justify-between border-b border-r border-stroke/60 transition-colors duration-fast min-h-[70px] p-1 sm:min-h-[96px] sm:p-1.5 lg:min-h-[120px] lg:p-2",
+        "group relative flex flex-col justify-between border-b border-r border-black/[0.05] transition-colors duration-fast min-h-[70px] p-1 sm:min-h-[96px] sm:p-1.5 lg:min-h-[120px] lg:p-2",
         day.outsideMonth
-          ? "bg-[#faf5f8]/45 hover:bg-white/60 text-secondary/40"
+          ? "bg-[#faf5f8]/30 hover:bg-white/60 text-secondary/40"
           : isToday
           ? "bg-pink/[0.04] hover:bg-white/90"
-          : "bg-surface/50 hover:bg-white",
+          : "bg-transparent hover:bg-white",
         isOver && "ring-2 ring-pink ring-inset bg-pink/[0.12] scale-[1.01] z-10 shadow-soft"
       )}
     >

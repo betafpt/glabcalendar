@@ -289,3 +289,52 @@ Mọi thành phần giao diện mới được xây dựng **bắt buộc import
   - Nguyên nhân: Next.js `unstable_cache` serialize dữ liệu trả về qua JSON khiến các trường `Date` (`startsAt`, `endsAt`, `createdAt`, `updatedAt`, `anchor`) bị biến thành string ISO, dẫn đến `RangeError: Invalid time value` khi gọi `Intl.DateTimeFormat.prototype.format()` hoặc `a.startsAt.getTime()`.
   - Khắc phục: Tự động re-hydrate toàn bộ đối tượng `Date` ngay tại `src/server/cached-loaders.ts` và bọc hàm chuyển đổi an toàn `toDate()` trong `src/app/calendar/page.tsx` và `src/app/integrations/google-calendar/google-calendar-view.tsx`.
 
+### 6.11. Tái Cấu Trúc Toàn Diện Visual Hierarchy, Canvas Thống Nhất & Spacing Chuẩn Reference (05/10/2026):
+- **Mục tiêu:** Tạo trải nghiệm calendar workspace thống nhất, thoáng, cân bằng và calendar-first chuẩn theo Reference 1 ở WEEK Timeline view. Xóa hoàn toàn khoảng trống lớn giữa icon rail và context panel.
+- **1. Khung Layout & Grid Tỷ Lệ Chuẩn Reference (ở desktop 1600px):**
+  - **Outer workspace:** `max-width: 1400px`, `margin: auto` (được quản lý thống nhất tại `AppShell`).
+  - **Icon rail trái:** Rộng đúng `120px`, nền `bg-transparent border-r border-black/[0.04]` hòa vào canvas blush, icon căn đều dọc.
+  - **Khoảng cách rail → context panel:** Đúng `30px` (`gap-x-[30px]`), xóa hoàn toàn khoảng trống thừa.
+  - **Context panel:** Rộng đúng `355px`, bắt đầu ngay dưới header, sát cạnh icon rail.
+  - **Khoảng cách context panel → main calendar:** Đúng `30px` (`gap-x-[30px]`).
+  - **Main calendar:** Chiếm phần chiều rộng còn lại (~865px), bắt đầu cùng hàng với context panel và là focal point chính.
+  - **CSS grid mục tiêu:** `grid-template-columns: 120px 355px minmax(0, 1fr); column-gap: 30px;`.
+- **2. View Mặc Định & Header:**
+  - **Default desktop view:** Là `Tuần` (Week Timeline), không phải `Tháng`.
+  - **Header 1 tầng:** Góc trái là `G.Lab Calendar *` nhỏ gọn, trung tâm là View switcher [Day | Week | Month] với `Week` active màu đen, góc phải là Search, Google Sync status và Avatar.
+- **3. Context Panel Hoàn Chỉnh:**
+  - **Mini calendar lớn:** Kích thước `355px × 308px` ở desktop, highlight ngày chọn màu xanh lime non signature `#D7F994`, ngày hôm nay có viền hồng, chấm tròn dưới ngày có buổi quay.
+  - **“Lịch quay hôm nay”:** Card tóm tắt cao ~100–120px khi thu gọn (tên shoot, giờ, status chip, tên dự án); click mở rộng chi tiết.
+  - **“Cần chú ý”:** Card tóm tắt cao ~100–120px khi thu gọn (xung đột ekip/thiết bị và số mục checklist); click mở rộng chi tiết.
+- **4. Main Calendar Week Timeline:**
+  - Header 7 ngày (`05 T2` hồng hôm nay, `06 T3`...).
+  - Cột mốc giờ `GMT+7` (8 Am - 6 Pm).
+  - Event blocks nằm trực tiếp trên time-grid theo khung giờ (tên dự án, tiêu đề shoot, giờ, avatar stack 1–3 + "+N", chấm trạng thái).
+  - Đường thời điểm hiện tại hồng sáng kèm glowing dot tại mốc giờ thực tế.
+  - Top toolbar trực tiếp trên grid: time range label, nút `< >`, nút `Today` và nút `+ Tạo lịch quay` pill đen.
+- **5. Kiểm Thử & Nghiệm Thu:**
+  - `npx tsc --noEmit`: PASS 0 lỗi.
+  - Playwright visual inspect tại 1600px: `railWidth: 120px`, `railToContextGap: 30px`, `contextWidth: 355px`, `contextToMainGap: 30px`, `mainCalendarWidth: 817px`.
+  - Screenshot đối chiếu chuẩn xác: `desktop_1600_blueprint.png`.
+
+### 6.12. Tối Ưu Bố Cục Fluid Responsive Cho Màn Hình Lớn Desktop / 2K / 4K (05/10/2026):
+- **Bối cảnh & Vấn đề giải quyết:** Bản mockup trước đây dùng khung cố định `max-width: 1400px` khiến giao diện trên màn hình Full HD 1080p, 2K (1440p) và 4K (2160p) bị co cụm ở giữa và xuất hiện dải nền trống lớn hai bên cạnh; chiều cao calendar bị lửng lơ.
+- **Giải pháp Kiến Trúc Fluid Grid:**
+  - **Loại bỏ hoàn toàn `max-width: 1400px` cố định** khỏi `AppShell`, layout co giãn mượt mà theo CSS viewport.
+  - **Outer padding-inline:** Áp dụng `clamp(24px, 4vw, 96px)` thông qua biến CSS `--app-shell-padding-inline` (16px trên mobile).
+  - **Icon Rail:** Rộng đúng chuẩn `110px`, căn đều dọc và sticky `h-screen`.
+  - **Context Panel:** Giữ khoảng `clamp(340px, 20vw, 380px)` thông qua `--app-context-width`, sticky khi cuộn trang (`lg:sticky lg:top-4`).
+  - **Main Calendar:** Dùng `minmax(0, 1fr)` hấp thụ 100% diện tích chiều ngang còn lại và là vùng mở rộng chính.
+  - **Khoảng cách (Gap):** Dùng `clamp(24px, 2vw, 40px)` thông qua `--app-shell-gap`.
+  - **Chiều cao Calendar:** Thiết lập `min-height: calc(100vh - 140px)` (tăng lên `calc(100vh - 150px)` ở 1920px và `calc(100vh - 160px)` ở 2560px) cùng time slot min-height tăng dần (`52px` -> `64px` -> `76px`) qua CSS media queries, giúp calendar trải dài trọn vẹn màn hình mà không bị lửng lơ.
+  - **Đường thời điểm hiện tại:** Tự động tính toán vị trí theo tỷ lệ phần trăm động `calc(12px + ratio * (100% - 24px))` đồng bộ với padding cột giờ, đảm bảo độ chính xác tuyệt đối ở mọi chiều cao viewport.
+- **Số liệu đo lường kiểm thử thực tế trên Playwright:**
+  - **1440×900:** Padding 57.6px | Rail 110px | Gap 29px | Context 340px | Gap 29px | Main Calendar 817px (Cao 760px). Giữ nguyên tỷ lệ reference ban đầu.
+  - **1920×1080:** Padding 76.8px | Rail 110px | Gap 38px | Context 380px | Gap 38px | Main Calendar 1200px (Cao 930px). Calendar mở rộng thêm +383px rõ rệt, triệt tiêu hoàn toàn khoảng trống thừa.
+  - **2560×1440:** Padding 96px | Rail 110px | Gap 40px | Context 380px | Gap 40px | Main Calendar 1798px (Cao 1280px). Bố cục cân đối, thoáng đãng, các cột ngày rộng ~240px.
+  - **3840×2160 (4K):** Padding 96px | Rail 110px | Gap 40px | Context 380px | Gap 40px | Main Calendar 3078px (Cao 2000px). Calendar bao phủ toàn bộ màn hình 4K, nội dung sắc nét và không phóng đại font/icon tùy tiện.
+- **Kết quả kiểm thử:**
+  - `npx tsc --noEmit`: PASS 0 lỗi.
+  - `npm run lint`: PASS 0 lỗi.
+  - `npm run build`: PASS 100% (18/18 routes biên dịch thành công).
+  - Screenshots lưu tại artifacts: `calendar_viewport_1440x900.png`, `calendar_viewport_1920x1080.png`, `calendar_viewport_2560x1440.png`, `calendar_viewport_3840x2160.png`.

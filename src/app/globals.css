@@ -86,6 +86,34 @@
   --motion-slow: 280ms;
   --tap-min: 44px;
   --bottom-nav-height: 64px;
+
+  /* Fluid Responsive Layout Tokens */
+  --app-shell-padding-inline: 16px;
+  --app-shell-gap: clamp(24px, 2vw, 40px);
+  --app-rail-width: 110px;
+  --app-context-width: clamp(340px, 20vw, 380px);
+  --calendar-min-height: calc(100vh - 140px);
+  --calendar-slot-min-height: 52px;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --app-shell-padding-inline: clamp(24px, 4vw, 96px);
+  }
+}
+
+@media (min-width: 1920px) {
+  :root {
+    --calendar-min-height: calc(100vh - 150px);
+    --calendar-slot-min-height: 64px;
+  }
+}
+
+@media (min-width: 2560px) {
+  :root {
+    --calendar-min-height: calc(100vh - 160px);
+    --calendar-slot-min-height: 76px;
+  }
 }
 
 @layer base {
@@ -121,5 +149,28 @@
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+}
+
+@layer utilities {
+  .app-shell-container {
+    width: 100%;
+    padding-inline: var(--app-shell-padding-inline);
+  }
+
+  .app-shell-grid {
+    display: grid;
+    grid-template-columns: var(--app-rail-width) minmax(0, 1fr);
+    column-gap: var(--app-shell-gap);
+  }
+
+  .calendar-workspace-grid {
+    display: grid;
+    grid-template-columns: var(--app-context-width) minmax(0, 1fr);
+    column-gap: var(--app-shell-gap);
+  }
+
+  .calendar-min-h {
+    min-height: var(--calendar-min-height);
   }
 }
