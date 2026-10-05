@@ -374,7 +374,7 @@ Mọi thành phần giao diện mới được xây dựng **bắt buộc import
   - Visual verification: Thẻ hiển thị sắc nét, đủ lề và cân đối.
   - Đã deploy lên production `calendar.geelab.vn` tại commit `a4d76fa`.
 
-### 6.16. Khóa Chiều Cao Viewport, Cải Tiến Week Timeline Chống Cuộn Trang Toàn Cục, Sticky Matrix & Bộ Điều Khiển Mật Độ Giờ (05/10/2026):
+### 6.16. Khóa Chiều Cao Viewport, Cải Tiến Week Timeline Chống Cuộn Trang Toàn Cục, Sticky Matrix & Bộ Điều Khiển Mật Độ Giờ (05/10/2026 - Commit `11923aa`):
 - **Bối cảnh & Vấn đề giải quyết:**
   - Timeline hiển thị các khung giờ theo chiều cao tự nhiên khiến toàn bộ trang web (body / app shell) bị kéo dài cuộn dọc, làm rail sidebar, header và context panel trôi mất khi xem các khung giờ muộn.
   - Người dùng không có cách thu nhỏ/phóng to tỷ lệ giờ theo nhu cầu (xem bao quát cả ngày hay tập trung vào khung giờ chi tiết).
@@ -405,10 +405,12 @@ Mọi thành phần giao diện mới được xây dựng **bắt buộc import
   - `.ui-backups/src-components-calendar-calendar-timeline-week--20261005-173600.bak.tsx`
   - `.ui-backups/src-app-calendar-page--20261005-173600.bak.tsx`
   - `.ui-backups/src-components-app-shell--20261005-173600.bak.tsx`
-- **Kiểm thử & Nghiệm thu:**
+- **Kiểm thử & Triển khai:**
   - Typecheck: PASS 0 lỗi (`npx tsc --noEmit`).
   - Unit tests: PASS 200/200 tests (34 test files).
   - Lint: PASS clean (`npm run lint`).
   - Next build: PASS 18/18 routes (`npm run build`).
   - Playwright visual testing: Thử nghiệm thực tế tại độ phân giải 1440×900 xác nhận sidebar, header và context panel cố định 100%, timeline cuộn mượt mà độc lập, mật độ giờ và nút Hiện tại hoạt động chuẩn xác.
+  - **Triển khai Production:** Đã commit và push lên nhánh `main` tại commit `11923aa`, kích hoạt deploy tự động lên `https://calendar.geelab.vn`.
+
 
