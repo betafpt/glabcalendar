@@ -80,7 +80,12 @@ const eventTones = [
   "bg-[#FFF9E6] text-[#3d2f0a] border border-[#FFE89A] shadow-sm", // Soft Lemon
 ];
 
-const hourSlots = [
+export const START_HOUR = 7;
+export const END_HOUR = 21; // 9:00 PM
+export const TOTAL_MINUTES = (END_HOUR - START_HOUR) * 60; // 840 mins
+
+export const hourSlots = [
+  { hour: 7, label: "7 Am" },
   { hour: 8, label: "8 Am" },
   { hour: 9, label: "9 Am" },
   { hour: 10, label: "10 Am" },
@@ -92,7 +97,140 @@ const hourSlots = [
   { hour: 16, label: "4 Pm" },
   { hour: 17, label: "5 Pm" },
   { hour: 18, label: "6 Pm" },
+  { hour: 19, label: "7 Pm" },
+  { hour: 20, label: "8 Pm" },
+  { hour: 21, label: "9 Pm" },
 ];
+
+function getMinutesInDay(isoString: string, timeZone: string): number {
+  try {
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return 8 * 60;
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: timeZone || "Asia/Ho_Chi_Minh",
+      hour: "numeric",
+      minute: "numeric",
+      hourCycle: "h23",
+    }).formatToParts(date);
+    const h = Number(parts.find((p) => p.type === "hour")?.value ?? 0);
+    const m = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
+    return h * 60 + m;
+  } catch {
+    return 8 * 60;
+  }
+}
+
+type PositionedShoot = {
+  shoot: TimelineShootItem;
+  top: string;
+  height: string;
+  left: string;
+  width: string;
+  zIndex: number;
+};
+
+function computeDayShootPositions(
+  shoots: TimelineShootItem[],
+  dayKey: string,
+  timeZone: string
+): PositionedShoot[] {
+  if (shoots.length === 0) return [];
+
+  const items = shoots.map((shoot) => {
+    let startMins = getMinutesInDay(shoot.startsAt, timeZone);
+    let endMins = getMinutesInDay(shoot.endsAt, timeZone);
+
+    // Multi-day overlap check
+    const shootStartKey = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(shoot.startsAt));
+
+    const shootEndKey = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(shoot.endsAt));
+
+    if (shootStartKey < dayKey) {
+      startMins = START_HOUR * 60;
+    }
+    if (shootEndKey > dayKey) {
+      endMins = END_HOUR * 60;
+    }
+
+    if (endMins <= startMins) {
+      endMins = startMins + 60;
+    }
+
+    const startOffset = Math.max(0, startMins - START_HOUR * 60);
+    const endOffset = Math.min(
+      TOTAL_MINUTES,
+      Math.max(startOffset + 30, endMins - START_HOUR * 60)
+    );
+
+    return {
+      shoot,
+      startMins,
+      endMins,
+      startOffset,
+      endOffset,
+    };
+  }).sort((a, b) => a.startMins - b.startMins || (b.endMins - b.startMins) - (a.endMins - a.startMins));
+
+  // Detect overlapping clusters
+  const clusters: typeof items[] = [];
+  let currentCluster: typeof items = [];
+  let clusterEnd = -1;
+
+  for (const item of items) {
+    if (currentCluster.length === 0 || item.startOffset < clusterEnd) {
+      currentCluster.push(item);
+      clusterEnd = Math.max(clusterEnd, item.endOffset);
+    } else {
+      clusters.push(currentCluster);
+      currentCluster = [item];
+      clusterEnd = item.endOffset;
+    }
+  }
+  if (currentCluster.length > 0) clusters.push(currentCluster);
+
+  const results: PositionedShoot[] = [];
+
+  for (const cluster of clusters) {
+    const totalCols = cluster.length;
+    cluster.forEach((item, colIdx) => {
+      const topFraction = Math.max(0, Math.min(1, item.startOffset / TOTAL_MINUTES));
+      const durationMins = Math.max(30, item.endOffset - item.startOffset);
+      const heightFraction = Math.max(0.04, durationMins / TOTAL_MINUTES);
+
+      const top = `calc(12px + ${(topFraction).toFixed(4)} * (100% - 24px))`;
+      const height = `calc(${(heightFraction).toFixed(4)} * (100% - 24px))`;
+
+      let left = "2px";
+      let width = "calc(100% - 4px)";
+      if (totalCols > 1) {
+        const colWidthPct = (100 / totalCols).toFixed(2);
+        left = `calc(${colIdx} * ${colWidthPct}% + 2px)`;
+        width = `calc(${colWidthPct}% - 4px)`;
+      }
+
+      results.push({
+        shoot: item.shoot,
+        top,
+        height,
+        left,
+        width,
+        zIndex: 10 + colIdx,
+      });
+    });
+  }
+
+  return results;
+}
 
 function formatTimeSlot(iso: string, timeZone: string) {
   try {
@@ -379,13 +517,13 @@ export function CalendarTimelineWeek({
             </div>
 
             {/* Timeline Rows: Hour slots and Event Cards */}
-            <div className="relative mt-2 flex-1 flex flex-col min-h-[calc(10*var(--calendar-slot-min-height))]">
+            <div className="relative mt-2 flex-1 flex flex-col min-h-[calc(14*var(--calendar-slot-min-height))]">
               {/* Current Time Horizontal Indicator Line (Signature Timeline Feature) */}
-              {currentHour >= 8 && currentHour <= 18 && (
+              {currentHour >= START_HOUR && currentHour <= END_HOUR && (
                 <div
                   className="pointer-events-none absolute left-0 right-0 z-20 flex items-center"
                   style={{
-                    top: `calc(12px + ${(Math.min(600, Math.max(0, (currentHour - 8) * 60 + currentMinute)) / 600).toFixed(4)} * (100% - 24px))`,
+                    top: `calc(12px + ${(Math.min(TOTAL_MINUTES, Math.max(0, (currentHour - START_HOUR) * 60 + currentMinute)) / TOTAL_MINUTES).toFixed(4)} * (100% - 24px))`,
                   }}
                 >
                   <span className="size-2 rounded-full bg-pink shadow-[0_0_8px_rgba(255,79,154,0.8)]" />
@@ -532,11 +670,16 @@ function DroppableTimelineColumn({
     data: { dateKey: day.dateKey, dayIso: day.dayIso },
   });
 
+  const positionedShoots = useMemo(
+    () => computeDayShootPositions(day.shoots, day.dateKey, timezone),
+    [day.shoots, day.dateKey, timezone]
+  );
+
   return (
     <div
       ref={setNodeRef}
       className={cn(
-        "relative flex flex-col h-full border-l border-stroke/50 px-1.5 py-1 transition-colors",
+        "relative h-full border-l border-stroke/50 transition-colors",
         day.isToday && "bg-pink/[0.02]",
         isOver && "bg-pink/[0.08] ring-2 ring-pink ring-inset z-10"
       )}
@@ -548,26 +691,36 @@ function DroppableTimelineColumn({
         ))}
       </div>
 
-      {/* Events inside this day column */}
-      <div className="relative z-10 space-y-2 2xl:space-y-3 pt-2">
-        {day.shoots.map((shoot, shootIdx) => {
+      {/* Events inside this day column positioned precisely on the timeline */}
+      <div className="pointer-events-none absolute inset-0">
+        {positionedShoots.map(({ shoot, top, height, left, width, zIndex }, shootIdx) => {
           const tone = eventTones[(colIdx + shootIdx) % eventTones.length];
           const projectName = shoot.projectId ? projectMap[shoot.projectId] : undefined;
 
           return (
-            <DraggableTimelineShootCard
+            <div
               key={shoot.id}
-              shoot={shoot}
-              tone={tone}
-              timezone={timezone}
-              projectName={projectName}
-            />
+              className="pointer-events-auto"
+              style={{
+                position: "absolute",
+                top,
+                height,
+                minHeight: "78px",
+                maxHeight: `calc(100% - ${top} + 12px)`,
+                left,
+                width,
+                zIndex,
+              }}
+            >
+              <DraggableTimelineShootCard
+                shoot={shoot}
+                tone={tone}
+                timezone={timezone}
+                projectName={projectName}
+              />
+            </div>
           );
         })}
-
-        {day.shoots.length === 0 ? (
-          <div className="h-20" />
-        ) : null}
       </div>
     </div>
   );
@@ -605,15 +758,16 @@ function DraggableTimelineShootCard({
       {...attributes}
       {...listeners}
       className={cn(
-        "cursor-grab active:cursor-grabbing select-none transition-all duration-fast",
+        "h-full w-full cursor-grab active:cursor-grabbing select-none transition-all duration-fast",
         isDragging && "opacity-25 scale-95"
       )}
     >
       <Link
         href={`/shoots/${shoot.id}`}
         className={cn(
-          "group block rounded-[16px] p-3 2xl:p-3.5 transition-all duration-fast hover:-translate-y-0.5 hover:shadow-soft active:scale-[0.98]",
-          tone
+          "group flex flex-col justify-between h-full rounded-[16px] p-2 sm:p-2.5 transition-all duration-fast hover:-translate-y-0.5 hover:shadow-soft active:scale-[0.98] overflow-hidden",
+          tone,
+          shoot.isPastOrCompleted && "opacity-60 grayscale-[25%]"
         )}
       >
         {/* Project Name or Shoot Title */}
@@ -626,12 +780,12 @@ function DraggableTimelineShootCard({
         </h4>
 
         {/* Time slot */}
-        <p className="mt-1.5 text-[10px] font-extrabold opacity-75 tabular-nums">
+        <p className="mt-0.5 text-[10px] font-extrabold opacity-75 tabular-nums">
           {timeLabel}
         </p>
 
         {/* Crew Avatar Stack (Max 3 + "+N" badge - Reference-identical!) */}
-        <div className="mt-2.5 flex items-center justify-between gap-1 pt-1.5 border-t border-black/5">
+        <div className="mt-1 flex items-center justify-between gap-1 pt-1 border-t border-black/5">
           <div className="flex -space-x-1.5 items-center">
             {shoot.crewNames && shoot.crewNames.length > 0 ? (
               <>

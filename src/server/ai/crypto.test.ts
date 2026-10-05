@@ -30,7 +30,8 @@ describe("AI Credential Encryption (AES-256-GCM)", () => {
     const parts = encrypted.encryptedSecret.split(":");
 
     // Tamper with ciphertext
-    const tamperedCipher = parts[2].slice(0, -2) + "aa";
+    const lastTwo = parts[2].slice(-2);
+    const tamperedCipher = parts[2].slice(0, -2) + (lastTwo === "aa" ? "bb" : "aa");
     const tamperedPayload = `${parts[0]}:${parts[1]}:${tamperedCipher}`;
 
     expect(() => decryptSecret(tamperedPayload)).toThrow();
