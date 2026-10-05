@@ -64,9 +64,9 @@ export function CalendarTopHeader({
   ];
 
   return (
-    <header className="flex h-14 items-center justify-between gap-3">
+    <header className="flex min-h-14 flex-wrap items-center justify-between gap-2 sm:h-14 sm:flex-nowrap sm:gap-3">
       {/* Góc trái main area: G.Lab Calendar * nhỏ gọn thanh lịch */}
-      <div className="flex items-center gap-2">
+      <div className="order-1 flex min-w-0 items-center gap-2 sm:order-none">
         <Link
           href="/calendar"
           className="group inline-flex items-baseline gap-1 text-lg sm:text-xl font-black tracking-[-0.03em] text-ink font-display transition-transform hover:scale-[1.01]"
@@ -77,7 +77,7 @@ export function CalendarTopHeader({
       </div>
 
       {/* Trung tâm: Segmented control Ngày / Tuần / Tháng */}
-      <div className="flex items-center rounded-full border border-black/[0.06] bg-white/80 p-1 shadow-xs backdrop-blur-md">
+      <div className="order-3 flex w-full items-center justify-center rounded-full border border-black/[0.06] bg-white/80 p-1 shadow-xs backdrop-blur-md sm:order-none sm:w-auto">
         {viewItems.map((item) => {
           const active = view === item.id;
           return (
@@ -99,7 +99,7 @@ export function CalendarTopHeader({
       </div>
 
       {/* Góc phải: search, Google Sync dạng icon/status nhỏ, notification, avatar/settings */}
-      <div className="flex items-center justify-end gap-2">
+      <div className="order-2 flex shrink-0 items-center justify-end gap-2 sm:order-none">
         {/* Quick Search Dialog */}
         <CalendarSearchTrigger
           shoots={searchShoots}

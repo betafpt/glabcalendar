@@ -342,7 +342,7 @@ Mọi thành phần giao diện mới được xây dựng **bắt buộc import
 ### 6.13. Tự Động Kéo Lịch Google Calendar & Nút Đồng Bộ Nhanh (05/10/2026 - Commit `99e9360`):
 - **Bối cảnh & Vấn đề giải quyết:** Sự kiện từ Google Calendar không tự động cập nhật sang G.Lab nếu người dùng không bấm đồng bộ thủ công trong trang settings.
 - **Giải pháp:**
-  - Triển khai cơ chế auto-pull ngầm an toàn tại `src/server/services/google-calendar-auto-pull.ts` có throttling (10 phút) để tránh lạm dụng hạn ngạch Google API.
+  - Triển khai cơ chế auto-pull ngầm an toàn tại `src/server/services/google-calendar-auto-pull.ts` có throttling/cooldown 90 giây để tránh gọi Google API lặp lại khi người dùng reload hoặc điều hướng liên tục, đồng thời vẫn giữ lịch đủ gần realtime.
   - Tích hợp hook kiểm tra và đồng bộ tự động khi người dùng truy cập trang `/calendar`.
   - Bổ sung nút Quick Sync trực quan trên top header (`src/components/calendar/calendar-quick-sync-button.tsx`) với animation xoay mượt mà, phản hồi toast và cập nhật tức thì.
 - **Kiểm thử:** 5 unit tests trong `src/server/services/google-calendar-auto-pull.test.ts` PASS 100%.
@@ -412,5 +412,4 @@ Mọi thành phần giao diện mới được xây dựng **bắt buộc import
   - Next build: PASS 18/18 routes (`npm run build`).
   - Playwright visual testing: Thử nghiệm thực tế tại độ phân giải 1440×900 xác nhận sidebar, header và context panel cố định 100%, timeline cuộn mượt mà độc lập, mật độ giờ và nút Hiện tại hoạt động chuẩn xác.
   - **Triển khai Production:** Đã commit và push lên nhánh `main` tại commit `11923aa`, kích hoạt deploy tự động lên `https://calendar.geelab.vn`.
-
 

@@ -504,7 +504,7 @@ export function CalendarTimelineWeek({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <section className="overflow-hidden rounded-[24px] border border-black/[0.05] bg-white p-3 sm:p-4 2xl:p-5 shadow-sm flex flex-col h-full min-h-0">
+      <section className="w-full min-w-0 max-w-full overflow-hidden rounded-[24px] border border-black/[0.05] bg-white p-3 sm:p-4 2xl:p-5 shadow-sm flex flex-col h-full min-h-0">
         {/* TIMELINE TOP TOOLBAR: PERIOD TITLE, PREV/NEXT, TODAY/HIỆN TẠI, DENSITY & + TẠO LỊCH QUAY */}
         <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between pb-3 border-b border-black/[0.05] shrink-0">
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
@@ -593,7 +593,7 @@ export function CalendarTimelineWeek({
         <div
           ref={timelineScrollRef}
           onScroll={handleScroll}
-          className="timeline-scroll-area mt-3 flex-1 min-h-0 overflow-y-auto overflow-x-auto [scrollbar-width:thin] select-none overscroll-contain relative"
+          className="timeline-scroll-area mt-3 w-full min-w-0 max-w-full flex-1 min-h-0 overflow-y-auto overflow-x-auto [scrollbar-width:thin] select-none overscroll-contain relative"
         >
           <div
             className="min-w-[720px] flex flex-col relative"
