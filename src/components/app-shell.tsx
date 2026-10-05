@@ -40,11 +40,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className={cn("min-h-screen bg-bg text-ink", isCalendar && "lg:h-screen lg:max-h-screen lg:overflow-hidden")}>
+    <div className={cn("min-h-screen bg-bg text-ink", isCalendar && "h-[100dvh] max-h-[100dvh] overflow-hidden")}>
       {/* Outer workspace: fluid responsive layout without rigid max-width */}
-      <div className={cn("app-shell-container", isCalendar && "lg:h-full lg:overflow-hidden")}>
+      <div className={cn("app-shell-container", isCalendar && "h-full overflow-hidden")}>
         {/* CSS grid: 110px icon rail, fluid gap, fluid main content */}
-        <div className={cn("lg:app-shell-grid lg:min-h-screen", isCalendar && "lg:h-full lg:min-h-0 lg:overflow-hidden")}>
+        <div className={cn("lg:app-shell-grid lg:min-h-screen", isCalendar && "h-full min-h-0 overflow-hidden lg:min-h-0")}>
           {/* Icon Rail: 110px width, blends into canvas */}
           <aside className="hidden w-[110px] border-r border-black/[0.04] bg-transparent py-7 lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:items-center lg:justify-between">
             {/* Top: G.Lab Round Logo Monogram */}
@@ -105,7 +105,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </aside>
 
           {/* Main Content Area */}
-          <div className={cn("min-w-0 flex-1 py-4 sm:py-6", isCalendar && "lg:py-3.5 lg:h-full lg:min-h-0 lg:flex lg:flex-col lg:overflow-hidden")}>
+          <div className={cn("min-w-0 flex-1 py-4 sm:py-6", isCalendar && "h-full min-h-0 flex flex-col overflow-hidden lg:py-3.5")}>
             {children}
           </div>
         </div>

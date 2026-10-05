@@ -48,11 +48,11 @@ export type TimelineDensity = "compact" | "standard" | "spacious";
 
 export const DENSITY_CONFIG: Record<
   TimelineDensity,
-  { label: string; shortLabel: string; hourHeight: number; minCardHeight: number }
+  { label: string; shortLabel: string; hourHeight: number }
 > = {
-  compact: { label: "Gọn", shortLabel: "Gọn", hourHeight: 40, minCardHeight: 36 },
-  standard: { label: "Tiêu chuẩn", shortLabel: "Chuẩn", hourHeight: 56, minCardHeight: 48 },
-  spacious: { label: "Rộng", shortLabel: "Rộng", hourHeight: 80, minCardHeight: 64 },
+  compact: { label: "Gọn", shortLabel: "Gọn", hourHeight: 40 },
+  standard: { label: "Tiêu chuẩn", shortLabel: "Chuẩn", hourHeight: 56 },
+  spacious: { label: "Rộng", shortLabel: "Rộng", hourHeight: 80 },
 };
 
 export const DENSITY_STORAGE_KEY = "glab_timeline_density";
@@ -147,8 +147,7 @@ function computeDayShootPositions(
   shoots: TimelineShootItem[],
   dayKey: string,
   timeZone: string,
-  hourHeight: number,
-  minCardHeight: number
+  hourHeight: number
 ): PositionedShoot[] {
   if (shoots.length === 0) return [];
 
@@ -219,9 +218,9 @@ function computeDayShootPositions(
   for (const cluster of clusters) {
     const totalCols = cluster.length;
     cluster.forEach((item, colIdx) => {
-      const topPx = Math.round((item.startOffset / 60) * hourHeight);
-      const durationHours = (item.endOffset - item.startOffset) / 60;
-      const heightPx = Math.max(minCardHeight, Math.round(durationHours * hourHeight));
+      const pixelsPerMinute = hourHeight / 60;
+      const topPx = item.startOffset * pixelsPerMinute;
+      const heightPx = Math.max(1, (item.endOffset - item.startOffset) * pixelsPerMinute);
 
       let left = "2px";
       let width = "calc(100% - 4px)";
@@ -320,21 +319,31 @@ export function CalendarTimelineWeek({
   };
 
   const hourHeight = DENSITY_CONFIG[density].hourHeight;
-  const minCardHeight = DENSITY_CONFIG[density].minCardHeight;
 
   // Timeline Scroll Ref & Auto-scroll logic
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const hasUserScrolledRef = useRef(false);
+  const [scrollEdges, setScrollEdges] = useState({ top: false, bottom: true });
 
-  const scrollToTime = useCallback((targetHour: number, smooth = true) => {
+  const updateScrollEdges = useCallback(() => {
+    const el = timelineScrollRef.current;
+    if (!el) return;
+    setScrollEdges({
+      top: el.scrollTop > 2,
+      bottom: el.scrollTop + el.clientHeight < el.scrollHeight - 2,
+    });
+  }, []);
+
+  const scrollToMinute = useCallback((minuteOfDay: number, smooth = true) => {
     if (!timelineScrollRef.current) return;
-    const hourToView = Math.max(START_HOUR, targetHour - 1);
-    const targetScrollTop = (hourToView - START_HOUR) * hourHeight;
+    const targetMinute = Math.max(START_HOUR * 60, minuteOfDay - 60);
+    const targetScrollTop = (targetMinute - START_HOUR * 60) * (hourHeight / 60);
     timelineScrollRef.current.scrollTo({
       top: targetScrollTop,
       behavior: smooth ? "smooth" : "auto",
     });
-  }, [hourHeight]);
+    requestAnimationFrame(updateScrollEdges);
+  }, [hourHeight, updateScrollEdges]);
 
   useEffect(() => {
     setColumnsData(days);
@@ -342,26 +351,31 @@ export function CalendarTimelineWeek({
 
   // Current time position calculation (e.g. 10:30 AM)
   const now = new Date();
-  const currentHour = now.getHours();
-  const currentMinute = now.getMinutes();
+  const currentMinutes = getMinutesInDay(now.toISOString(), timezone);
+  const currentHour = Math.floor(currentMinutes / 60);
+  const currentMinute = currentMinutes % 60;
 
   // Auto-scroll when viewing current period or another week
   useEffect(() => {
     const timer = setTimeout(() => {
       if (isViewingCurrentPeriod) {
         if (!hasUserScrolledRef.current) {
-          scrollToTime(currentHour, false);
+          const target = currentHour >= START_HOUR && currentHour <= END_HOUR
+            ? currentMinutes
+            : 8 * 60;
+          scrollToMinute(target, false);
         }
       } else {
-        scrollToTime(8, false); // 08:00 AM for other weeks
+        scrollToMinute(8 * 60, false);
       }
     }, 60);
 
     return () => clearTimeout(timer);
-  }, [isViewingCurrentPeriod, currentHour, scrollToTime]);
+  }, [isViewingCurrentPeriod, currentHour, currentMinutes, scrollToMinute]);
 
   const handleScroll = () => {
     hasUserScrolledRef.current = true;
+    updateScrollEdges();
   };
 
   // Sensors for DnD
@@ -405,11 +419,48 @@ export function CalendarTimelineWeek({
       day: "2-digit",
     }).format(oldStart);
 
-    if (oldDateKey === targetDateKey) return;
-
     const durationMs = Math.max(1800_000, oldEnd.getTime() - oldStart.getTime());
-    const newStart = new Date(oldStart);
-    newStart.setFullYear(targetYear, targetMonth - 1, targetDay);
+    const durationMinutes = Math.max(30, Math.round(durationMs / 60_000));
+    const pixelsPerMinute = hourHeight / 60;
+    const draggedMinutes = event.delta.y / pixelsPerMinute;
+    const snappedDeltaMinutes = Math.round(draggedMinutes / 15) * 15;
+    const originalMinutes = getMinutesInDay(currentStartsAt, timezone);
+    const latestStartMinute = Math.max(START_HOUR * 60, END_HOUR * 60 - durationMinutes);
+    const targetStartMinute = Math.min(
+      latestStartMinute,
+      Math.max(START_HOUR * 60, originalMinutes + snappedDeltaMinutes)
+    );
+
+    if (oldDateKey === targetDateKey && targetStartMinute === originalMinutes) return;
+
+    const targetHour = Math.floor(targetStartMinute / 60);
+    const targetMinute = targetStartMinute % 60;
+    const desiredAsUtc = Date.UTC(targetYear, targetMonth - 1, targetDay, targetHour, targetMinute, 0);
+    let newStart = new Date(desiredAsUtc);
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const representedParts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: timezone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      }).formatToParts(newStart);
+      const represented = (type: string) => Number(representedParts.find((p) => p.type === type)?.value ?? 0);
+      const representedAsUtc = Date.UTC(
+        represented("year"),
+        represented("month") - 1,
+        represented("day"),
+        represented("hour"),
+        represented("minute"),
+        0
+      );
+      const correction = desiredAsUtc - representedAsUtc;
+      if (correction === 0) break;
+      newStart = new Date(newStart.getTime() + correction);
+    }
     const newEnd = new Date(newStart.getTime() + durationMs);
 
     const newStartIso = newStart.toISOString();
@@ -536,7 +587,10 @@ export function CalendarTimelineWeek({
                 if (isViewingCurrentPeriod) {
                   e.preventDefault();
                   hasUserScrolledRef.current = false;
-                  scrollToTime(currentHour, true);
+                  const target = currentHour >= START_HOUR && currentHour <= END_HOUR
+                    ? currentMinutes
+                    : 8 * 60;
+                  scrollToMinute(target, true);
                 }
               }}
               title="Về ngày và giờ hiện tại"
@@ -590,15 +644,16 @@ export function CalendarTimelineWeek({
         </div>
 
         {/* TIMELINE SCROLL AREA (CHỈ VÙNG NÀY ĐƯỢC overflow-y: auto) */}
-        <div
-          ref={timelineScrollRef}
-          onScroll={handleScroll}
-          className="timeline-scroll-area mt-3 w-full min-w-0 max-w-full flex-1 min-h-0 overflow-y-auto overflow-x-auto [scrollbar-width:thin] select-none overscroll-contain relative"
-        >
+        <div className="relative mt-3 flex-1 min-h-0 w-full min-w-0 max-w-full overflow-hidden">
           <div
-            className="min-w-[720px] flex flex-col relative"
-            style={{ minHeight: `${TOTAL_HOURS * hourHeight + 52}px` }}
+            ref={timelineScrollRef}
+            onScroll={handleScroll}
+            className="timeline-scroll-area h-full w-full min-w-0 max-w-full overflow-y-auto overflow-x-auto select-none overscroll-contain relative"
           >
+            <div
+              className="min-w-[720px] flex flex-col relative"
+              style={{ minHeight: `${TOTAL_HOURS * hourHeight + 52}px` }}
+            >
             {/* 2.1 STICKY DAY HEADERS ROW */}
             <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md grid grid-cols-[60px_repeat(7,minmax(0,1fr))] border-b border-black/[0.05] pb-2 pt-1.5">
               {/* Top-left corner: GMT+7 (sticky both top and left) */}
@@ -656,7 +711,6 @@ export function CalendarTimelineWeek({
                   timezone={timezone}
                   projectMap={projectMap}
                   hourHeight={hourHeight}
-                  minCardHeight={minCardHeight}
                   density={density}
                 />
               ))}
@@ -674,7 +728,14 @@ export function CalendarTimelineWeek({
                 </div>
               )}
             </div>
+            </div>
           </div>
+          {scrollEdges.top ? (
+            <div className="pointer-events-none absolute inset-x-0 top-0 z-50 h-3 shadow-[inset_0_8px_10px_-12px_rgba(9,9,9,0.35)]" />
+          ) : null}
+          {scrollEdges.bottom ? (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-50 h-3 shadow-[inset_0_-8px_10px_-12px_rgba(9,9,9,0.35)]" />
+          ) : null}
         </div>
       </section>
 
@@ -780,7 +841,6 @@ function DroppableTimelineColumn({
   timezone,
   projectMap,
   hourHeight,
-  minCardHeight,
   density,
 }: {
   day: TimelineDayData;
@@ -788,7 +848,6 @@ function DroppableTimelineColumn({
   timezone: string;
   projectMap: Record<string, string>;
   hourHeight: number;
-  minCardHeight: number;
   density: TimelineDensity;
 }) {
   const { setNodeRef, isOver } = useDroppable({
@@ -797,8 +856,8 @@ function DroppableTimelineColumn({
   });
 
   const positionedShoots = useMemo(
-    () => computeDayShootPositions(day.shoots, day.dateKey, timezone, hourHeight, minCardHeight),
-    [day.shoots, day.dateKey, timezone, hourHeight, minCardHeight]
+    () => computeDayShootPositions(day.shoots, day.dateKey, timezone, hourHeight),
+    [day.shoots, day.dateKey, timezone, hourHeight]
   );
 
   return (

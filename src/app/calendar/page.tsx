@@ -696,7 +696,7 @@ export default async function CalendarPage({
   });
 
   return (
-    <div className="w-full flex-1 flex flex-col min-h-0 lg:h-full lg:max-h-full lg:overflow-hidden pb-24 lg:pb-0">
+    <div className="w-full h-full max-h-full flex-1 flex flex-col min-h-0 overflow-hidden pb-[calc(var(--bottom-nav-height)+12px)] lg:pb-0">
       {/* 1. TOP HEADER (Góc trái: G.Lab Calendar *, Giữa: [Ngày | Tuần | Tháng] với Tuần active, Phải: controls) */}
       <CalendarTopHeader
         view={view}
