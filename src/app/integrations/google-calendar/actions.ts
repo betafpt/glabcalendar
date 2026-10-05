@@ -36,6 +36,15 @@ export async function triggerGoogleCalendarSyncAction(): Promise<ActionState> {
     revalidatePath("/calendar");
     revalidatePath("/");
 
+    try {
+      const { revalidateTag } = await import("next/cache");
+      const { CACHE_TAGS } = await import("@/server/cache-keys");
+      revalidateTag(CACHE_TAGS.calendar(organization.id));
+      revalidateTag(CACHE_TAGS.dashboard(organization.id));
+    } catch (e) {
+      console.warn("revalidateTag warning:", e);
+    }
+
     if (!result.ok) {
       return {
         ok: false,

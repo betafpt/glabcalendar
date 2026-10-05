@@ -59,6 +59,11 @@ type PageData = {
     pendingChecklistCount: number;
     checklistItems: Array<{ id: string; title: string; shootTitle: string; completed: boolean }>;
   };
+  googleConnection?: {
+    connected: boolean;
+    lastSyncedAt?: string | null;
+    accountEmail?: string | null;
+  };
   error?: string;
 };
 
@@ -319,15 +324,53 @@ async function loadData(
         ? monthGridRange(anchor, organization.timezone)
         : calendarRange(view, anchor, organization.timezone);
     const calendarRepo = createCalendarRepository(db);
+
+    // Auto-pull changes from Google Calendar with cooldown (90s) & timeout guard (3.5s)
+    let autoPulledCount = 0;
+    let googleConnectionInfo: PageData["googleConnection"] = undefined;
+    try {
+      const { createGoogleCalendarRepository } = await import("@/server/db/google-calendar");
+      const googleRepo = createGoogleCalendarRepository(db);
+      const conn = await googleRepo.getUserConnection(organization.id, user.id);
+      if (conn) {
+        googleConnectionInfo = {
+          connected: conn.status === "connected",
+          lastSyncedAt: conn.lastSyncedAt ? new Date(conn.lastSyncedAt).toISOString() : null,
+          accountEmail: conn.accountEmail ?? null,
+        };
+      }
+      const { maybeAutoPullGoogleCalendar } = await import("@/server/services/google-calendar-auto-pull");
+      const autoPullResult = await maybeAutoPullGoogleCalendar(organization.id, user.id);
+      autoPulledCount = autoPullResult.pulledCount;
+      if (autoPullResult.ran && autoPullResult.reason === "success") {
+        if (googleConnectionInfo) {
+          googleConnectionInfo.lastSyncedAt = new Date().toISOString();
+        }
+      }
+    } catch (e) {
+      console.warn("Auto-pull Google Calendar warning in loadData:", e);
+    }
+
     const { getCachedCalendarShoots, getCachedCalendarFilterOptions } = await import("@/server/cached-loaders");
     const filtersKey = JSON.stringify(filters);
+
+    // If new shoots were pulled during this request, bypass cache to load fresh DB records immediately
+    const workspaceShootsPromise = autoPulledCount > 0
+      ? createCalendarService(calendarRepo).list(
+          organization.id,
+          queryRange.start,
+          queryRange.end,
+          filters
+        )
+      : getCachedCalendarShoots(
+          organization.id,
+          queryRange.start.toISOString(),
+          queryRange.end.toISOString(),
+          filtersKey
+        );
+
     const [workspaceShoots, assignedShoots, filterOptions] = await Promise.all([
-      getCachedCalendarShoots(
-        organization.id,
-        queryRange.start.toISOString(),
-        queryRange.end.toISOString(),
-        filtersKey
-      ),
+      workspaceShootsPromise,
       calendarRepo.listAssignedRange(user.id, queryRange.start, queryRange.end, filters),
       getCachedCalendarFilterOptions(organization.id),
     ]);
@@ -411,6 +454,7 @@ async function loadData(
       timezone: organization.timezone,
       shootCrewMap,
       attentionData,
+      googleConnection: googleConnectionInfo,
     };
   } catch (error) {
     if (isRedirectError(error)) throw error;
@@ -675,6 +719,7 @@ export default async function CalendarPage({
         projectMap={Object.fromEntries(projectMap.entries())}
         timezone={data.timezone}
         hasActiveFilters={hasActiveFilters}
+        googleConnection={data.googleConnection}
       />
 
       {/* Mobile Drawer Trigger for Left Context Panel (Reference Column 2 on Mobile) */}

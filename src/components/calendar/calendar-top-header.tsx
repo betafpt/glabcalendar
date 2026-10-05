@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { LocalizedText } from "@/components/ui/localized-text";
 import { WorkspaceMenu } from "@/components/production/workspace-menu";
 import { CalendarSearchTrigger } from "@/components/calendar/calendar-search-trigger";
+import { CalendarQuickSyncButton } from "@/components/calendar/calendar-quick-sync-button";
 import type { CalendarView } from "@/lib/calendar-range";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +30,11 @@ type CalendarTopHeaderProps = {
   projectMap: Record<string, string>;
   timezone: string;
   hasActiveFilters?: boolean;
+  googleConnection?: {
+    connected: boolean;
+    lastSyncedAt?: string | null;
+    accountEmail?: string | null;
+  } | null;
 };
 
 export function CalendarTopHeader({
@@ -37,6 +43,7 @@ export function CalendarTopHeader({
   searchShoots,
   projectMap,
   timezone,
+  googleConnection,
 }: CalendarTopHeaderProps) {
   const router = useRouter();
 
@@ -100,15 +107,8 @@ export function CalendarTopHeader({
           timezone={timezone}
         />
 
-        {/* Google Sync Status - Compact icon/status */}
-        <Link
-          href="/integrations/google-calendar"
-          title="Google Calendar Sync: Hoạt động"
-          className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-black/[0.06] bg-white/80 px-2.5 py-1 text-[11px] font-bold text-ink shadow-xs hover:border-pink/40 transition-colors"
-        >
-          <span className="size-2 rounded-full bg-[#1da875]" />
-          <span className="text-[10px] font-bold text-secondary">Sync</span>
-        </Link>
+        {/* Google Sync Status & On-Demand Sync */}
+        <CalendarQuickSyncButton initialConnection={googleConnection} />
 
         {/* Profile & Workspace Menu */}
         <WorkspaceMenu />
