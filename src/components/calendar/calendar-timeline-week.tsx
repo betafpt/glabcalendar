@@ -10,6 +10,7 @@ import React, {
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { motion, useReducedMotion } from "motion/react";
 import {
   DndContext,
   DragOverlay,
@@ -44,39 +45,39 @@ import {
 import { rescheduleShootAction } from "@/app/shoots/actions";
 import { cn } from "@/lib/utils";
 
-export type TimelineDensity = "compact" | "standard" | "spacious";
+export const MIN_PIXELS_PER_HOUR = 32;
+export const MAX_PIXELS_PER_HOUR = 96;
+export const DEFAULT_PIXELS_PER_HOUR = 56;
+export const TIME_SCALE_STORAGE_KEY = "glab_timeline_time_scale";
 
-export const DENSITY_CONFIG: Record<
-  TimelineDensity,
-  { label: string; shortLabel: string; hourHeight: number }
-> = {
-  compact: { label: "Gọn", shortLabel: "Gọn", hourHeight: 40 },
-  standard: { label: "Tiêu chuẩn", shortLabel: "Chuẩn", hourHeight: 56 },
-  spacious: { label: "Rộng", shortLabel: "Rộng", hourHeight: 80 },
-};
+import {
+  START_HOUR,
+  END_HOUR,
+  TOTAL_HOURS,
+  TOTAL_MINUTES,
+  hourSlots,
+  getMinutesInDay,
+  getDayBoundaries,
+  computeDayShootPositions,
+  getDefaultScrollMinute,
+  getNowScrollMinute,
+  type TimelineShootItem,
+  type TimelineDayData,
+  type PositionedShoot,
+} from "@/lib/timeline-math";
 
-export const DENSITY_STORAGE_KEY = "glab_timeline_density";
-
-export type TimelineShootItem = {
-  id: string;
-  title: string;
-  startsAt: string;
-  endsAt: string;
-  status: string;
-  isPastOrCompleted: boolean;
-  projectId?: string | null;
-  locationName?: string | null;
-  crewNames?: string[];
-};
-
-export type TimelineDayData = {
-  dateKey: string;
-  dayNumber: number;
-  dayName: string;
-  isToday: boolean;
-  isAnchor: boolean;
-  dayIso: string;
-  shoots: TimelineShootItem[];
+export type { TimelineShootItem, TimelineDayData, PositionedShoot };
+export {
+  START_HOUR,
+  END_HOUR,
+  TOTAL_HOURS,
+  TOTAL_MINUTES,
+  hourSlots,
+  getMinutesInDay,
+  getDayBoundaries,
+  computeDayShootPositions,
+  getDefaultScrollMinute,
+  getNowScrollMinute,
 };
 
 type CalendarTimelineWeekProps = {
@@ -100,149 +101,6 @@ const eventTones = [
   "bg-[#FFF9E6] text-[#3d2f0a] border border-[#FFE89A] shadow-sm", // Soft Lemon
 ];
 
-export const START_HOUR = 7;
-export const END_HOUR = 21; // 9:00 PM
-export const TOTAL_HOURS = END_HOUR - START_HOUR; // 14 hours
-export const TOTAL_MINUTES = TOTAL_HOURS * 60; // 840 mins
-
-export const hourSlots = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => {
-  const hour = START_HOUR + i;
-  const label =
-    hour === 12
-      ? "12 Pm"
-      : hour > 12
-      ? `${hour - 12} Pm`
-      : `${hour} Am`;
-  return { hour, label };
-});
-
-function getMinutesInDay(isoString: string, timeZone: string): number {
-  try {
-    const date = new Date(isoString);
-    if (isNaN(date.getTime())) return 8 * 60;
-    const parts = new Intl.DateTimeFormat("en-GB", {
-      timeZone: timeZone || "Asia/Ho_Chi_Minh",
-      hour: "numeric",
-      minute: "numeric",
-      hourCycle: "h23",
-    }).formatToParts(date);
-    const h = Number(parts.find((p) => p.type === "hour")?.value ?? 0);
-    const m = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
-    return h * 60 + m;
-  } catch {
-    return 8 * 60;
-  }
-}
-
-type PositionedShoot = {
-  shoot: TimelineShootItem;
-  top: string;
-  height: string;
-  left: string;
-  width: string;
-  zIndex: number;
-};
-
-function computeDayShootPositions(
-  shoots: TimelineShootItem[],
-  dayKey: string,
-  timeZone: string,
-  hourHeight: number
-): PositionedShoot[] {
-  if (shoots.length === 0) return [];
-
-  const items = shoots.map((shoot) => {
-    let startMins = getMinutesInDay(shoot.startsAt, timeZone);
-    let endMins = getMinutesInDay(shoot.endsAt, timeZone);
-
-    // Multi-day overlap check
-    const shootStartKey = new Intl.DateTimeFormat("en-CA", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date(shoot.startsAt));
-
-    const shootEndKey = new Intl.DateTimeFormat("en-CA", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date(shoot.endsAt));
-
-    if (shootStartKey < dayKey) {
-      startMins = START_HOUR * 60;
-    }
-    if (shootEndKey > dayKey) {
-      endMins = END_HOUR * 60;
-    }
-
-    if (endMins <= startMins) {
-      endMins = startMins + 60;
-    }
-
-    const startOffset = Math.max(0, startMins - START_HOUR * 60);
-    const endOffset = Math.min(
-      TOTAL_MINUTES,
-      Math.max(startOffset + 15, endMins - START_HOUR * 60)
-    );
-
-    return {
-      shoot,
-      startMins,
-      endMins,
-      startOffset,
-      endOffset,
-    };
-  }).sort((a, b) => a.startMins - b.startMins || (b.endMins - b.startMins) - (a.endMins - a.startMins));
-
-  // Detect overlapping clusters
-  const clusters: typeof items[] = [];
-  let currentCluster: typeof items = [];
-  let clusterEnd = -1;
-
-  for (const item of items) {
-    if (currentCluster.length === 0 || item.startOffset < clusterEnd) {
-      currentCluster.push(item);
-      clusterEnd = Math.max(clusterEnd, item.endOffset);
-    } else {
-      clusters.push(currentCluster);
-      currentCluster = [item];
-      clusterEnd = item.endOffset;
-    }
-  }
-  if (currentCluster.length > 0) clusters.push(currentCluster);
-
-  const results: PositionedShoot[] = [];
-
-  for (const cluster of clusters) {
-    const totalCols = cluster.length;
-    cluster.forEach((item, colIdx) => {
-      const pixelsPerMinute = hourHeight / 60;
-      const topPx = item.startOffset * pixelsPerMinute;
-      const heightPx = Math.max(1, (item.endOffset - item.startOffset) * pixelsPerMinute);
-
-      let left = "2px";
-      let width = "calc(100% - 4px)";
-      if (totalCols > 1) {
-        const colWidthPct = (100 / totalCols).toFixed(2);
-        left = `calc(${colIdx} * ${colWidthPct}% + 2px)`;
-        width = `calc(${colWidthPct}% - 4px)`;
-      }
-
-      results.push({
-        shoot: item.shoot,
-        top: `${topPx}px`,
-        height: `${heightPx}px`,
-        left,
-        width,
-        zIndex: 10 + colIdx,
-      });
-    });
-  }
-
-  return results;
-}
 
 function formatTimeSlot(iso: string, timeZone: string) {
   try {
@@ -265,6 +123,8 @@ type ActiveDragData = {
   tone: string;
   projectName?: string;
   crewNames?: string[];
+  displayedSegmentStartMins?: number;
+  dayKey?: string;
 };
 
 type ConflictDialogState = {
@@ -290,35 +150,35 @@ export function CalendarTimelineWeek({
   const router = useRouter();
   const { showToast } = useToast();
   const [, startTransition] = useTransition();
+  const shouldReduceMotion = useReducedMotion();
 
   const [columnsData, setColumnsData] = useState<TimelineDayData[]>(days);
   const [activeShoot, setActiveShoot] = useState<ActiveDragData | null>(null);
   const [conflictData, setConflictData] = useState<ConflictDialogState>(null);
 
-  // Density State (compact: 40px, standard: 56px, spacious: 80px)
-  const [density, setDensity] = useState<TimelineDensity>("standard");
+  const [pixelsPerHour, setPixelsPerHour] = useState(DEFAULT_PIXELS_PER_HOUR);
+  const [isResizingTimeScale, setIsResizingTimeScale] = useState(false);
+  const resizeStateRef = useRef<{
+    pointerId: number;
+    startY: number;
+    startScale: number;
+    currentScale: number;
+    anchorY: number;
+    anchorMinute: number;
+  } | null>(null);
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(DENSITY_STORAGE_KEY) as TimelineDensity | null;
-      if (saved && (saved === "compact" || saved === "standard" || saved === "spacious")) {
-        setDensity(saved);
+      const saved = Number(localStorage.getItem(TIME_SCALE_STORAGE_KEY));
+      if (Number.isFinite(saved)) {
+        setPixelsPerHour(Math.max(MIN_PIXELS_PER_HOUR, Math.min(MAX_PIXELS_PER_HOUR, saved)));
       }
     } catch {
       // Ignore localStorage errors
     }
   }, []);
 
-  const handleDensityChange = (newDensity: TimelineDensity) => {
-    setDensity(newDensity);
-    try {
-      localStorage.setItem(DENSITY_STORAGE_KEY, newDensity);
-    } catch {
-      // Ignore
-    }
-  };
-
-  const hourHeight = DENSITY_CONFIG[density].hourHeight;
+  const hourHeight = pixelsPerHour;
 
   // Timeline Scroll Ref & Auto-scroll logic
   const timelineScrollRef = useRef<HTMLDivElement>(null);
@@ -336,8 +196,8 @@ export function CalendarTimelineWeek({
 
   const scrollToMinute = useCallback((minuteOfDay: number, smooth = true) => {
     if (!timelineScrollRef.current) return;
-    const targetMinute = Math.max(START_HOUR * 60, minuteOfDay - 60);
-    const targetScrollTop = (targetMinute - START_HOUR * 60) * (hourHeight / 60);
+    const clampedMinute = Math.max(0, Math.min(TOTAL_MINUTES, minuteOfDay));
+    const targetScrollTop = clampedMinute * (hourHeight / 60);
     timelineScrollRef.current.scrollTo({
       top: targetScrollTop,
       behavior: smooth ? "smooth" : "auto",
@@ -352,30 +212,95 @@ export function CalendarTimelineWeek({
   // Current time position calculation (e.g. 10:30 AM)
   const now = new Date();
   const currentMinutes = getMinutesInDay(now.toISOString(), timezone);
-  const currentHour = Math.floor(currentMinutes / 60);
   const currentMinute = currentMinutes % 60;
 
   // Auto-scroll when viewing current period or another week
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (isViewingCurrentPeriod) {
-        if (!hasUserScrolledRef.current) {
-          const target = currentHour >= START_HOUR && currentHour <= END_HOUR
-            ? currentMinutes
-            : 8 * 60;
-          scrollToMinute(target, false);
+      if (hasUserScrolledRef.current) return;
+
+      let targetMinute: number;
+      let shouldScrollNow = false;
+      try {
+        if (sessionStorage.getItem("glab_scroll_now") === "1") {
+          shouldScrollNow = true;
+          sessionStorage.removeItem("glab_scroll_now");
         }
-      } else {
-        scrollToMinute(8 * 60, false);
+      } catch {
+        // Ignore
       }
+
+      if (shouldScrollNow) {
+        targetMinute = getNowScrollMinute(currentMinutes);
+      } else {
+        targetMinute = getDefaultScrollMinute(columnsData, timezone);
+      }
+      scrollToMinute(targetMinute, false);
     }, 60);
 
     return () => clearTimeout(timer);
-  }, [isViewingCurrentPeriod, currentHour, currentMinutes, scrollToMinute]);
+  }, [columnsData, timezone, currentMinutes, scrollToMinute]);
 
   const handleScroll = () => {
     hasUserScrolledRef.current = true;
     updateScrollEdges();
+  };
+
+  const handleTimeScalePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const scrollEl = timelineScrollRef.current;
+    if (!scrollEl) return;
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const rect = scrollEl.getBoundingClientRect();
+    const anchorY = Math.max(0, Math.min(scrollEl.clientHeight, event.clientY - rect.top));
+    resizeStateRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      startScale: pixelsPerHour,
+      currentScale: pixelsPerHour,
+      anchorY,
+      anchorMinute: (scrollEl.scrollTop + anchorY) / (pixelsPerHour / 60),
+    };
+    hasUserScrolledRef.current = true;
+    setIsResizingTimeScale(true);
+  };
+
+  const handleTimeScalePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const state = resizeStateRef.current;
+    const scrollEl = timelineScrollRef.current;
+    if (!state || !scrollEl || state.pointerId !== event.pointerId) return;
+
+    const nextScale = Math.round(
+      Math.max(
+        MIN_PIXELS_PER_HOUR,
+        Math.min(MAX_PIXELS_PER_HOUR, state.startScale + (event.clientY - state.startY) * 0.5)
+      )
+    );
+    if (nextScale === pixelsPerHour) return;
+
+    state.currentScale = nextScale;
+    setPixelsPerHour(nextScale);
+    requestAnimationFrame(() => {
+      const maxScrollTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
+      scrollEl.scrollTop = Math.max(
+        0,
+        Math.min(maxScrollTop, state.anchorMinute * (nextScale / 60) - state.anchorY)
+      );
+      updateScrollEdges();
+    });
+  };
+
+  const finishTimeScaleResize = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const state = resizeStateRef.current;
+    if (!state || state.pointerId !== event.pointerId) return;
+    resizeStateRef.current = null;
+    setIsResizingTimeScale(false);
+    try {
+      localStorage.setItem(TIME_SCALE_STORAGE_KEY, String(state.currentScale));
+    } catch {
+      // Ignore localStorage errors
+    }
   };
 
   // Sensors for DnD
@@ -406,61 +331,45 @@ export function CalendarTimelineWeek({
 
     if (!targetDateKey || !shootId || !currentStartsAt) return;
 
-    const [targetYear, targetMonth, targetDay] = targetDateKey.split("-").map(Number);
-    if (!targetYear || !targetMonth || !targetDay) return;
-
     const oldStart = new Date(currentStartsAt);
     const oldEnd = new Date(currentEndsAt);
-
-    const oldDateKey = new Intl.DateTimeFormat("en-CA", {
-      timeZone: timezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(oldStart);
-
     const durationMs = Math.max(1800_000, oldEnd.getTime() - oldStart.getTime());
-    const durationMinutes = Math.max(30, Math.round(durationMs / 60_000));
+
+    const renderedDayKey = String(
+      active.data.current?.dayKey ||
+        new Intl.DateTimeFormat("en-CA", {
+          timeZone: timezone,
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).format(oldStart)
+    );
+
+    const displayedSegmentStartMins =
+      typeof active.data.current?.displayedSegmentStartMins === "number"
+        ? active.data.current.displayedSegmentStartMins
+        : getMinutesInDay(currentStartsAt, timezone);
+
     const pixelsPerMinute = hourHeight / 60;
     const draggedMinutes = event.delta.y / pixelsPerMinute;
     const snappedDeltaMinutes = Math.round(draggedMinutes / 15) * 15;
-    const originalMinutes = getMinutesInDay(currentStartsAt, timezone);
-    const latestStartMinute = Math.max(START_HOUR * 60, END_HOUR * 60 - durationMinutes);
-    const targetStartMinute = Math.min(
-      latestStartMinute,
-      Math.max(START_HOUR * 60, originalMinutes + snappedDeltaMinutes)
+    const targetSegmentStartMins = Math.max(
+      0,
+      Math.min(TOTAL_MINUTES - 15, displayedSegmentStartMins + snappedDeltaMinutes)
     );
 
-    if (oldDateKey === targetDateKey && targetStartMinute === originalMinutes) return;
-
-    const targetHour = Math.floor(targetStartMinute / 60);
-    const targetMinute = targetStartMinute % 60;
-    const desiredAsUtc = Date.UTC(targetYear, targetMonth - 1, targetDay, targetHour, targetMinute, 0);
-    let newStart = new Date(desiredAsUtc);
-
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const representedParts = new Intl.DateTimeFormat("en-CA", {
-        timeZone: timezone,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        hourCycle: "h23",
-      }).formatToParts(newStart);
-      const represented = (type: string) => Number(representedParts.find((p) => p.type === type)?.value ?? 0);
-      const representedAsUtc = Date.UTC(
-        represented("year"),
-        represented("month") - 1,
-        represented("day"),
-        represented("hour"),
-        represented("minute"),
-        0
-      );
-      const correction = desiredAsUtc - representedAsUtc;
-      if (correction === 0) break;
-      newStart = new Date(newStart.getTime() + correction);
+    if (renderedDayKey === targetDateKey && targetSegmentStartMins === displayedSegmentStartMins) {
+      return;
     }
+
+    const { dayStartMs: sourceDayStartMs } = getDayBoundaries(renderedDayKey, timezone);
+    const origSegmentMs = sourceDayStartMs + displayedSegmentStartMins * 60_000;
+
+    const { dayStartMs: targetDayStartMs } = getDayBoundaries(targetDateKey, timezone);
+    const targetSegmentMs = targetDayStartMs + targetSegmentStartMins * 60_000;
+
+    const shiftMs = targetSegmentMs - origSegmentMs;
+    const newStart = new Date(oldStart.getTime() + shiftMs);
     const newEnd = new Date(newStart.getTime() + durationMs);
 
     const newStartIso = newStart.toISOString();
@@ -478,19 +387,33 @@ export function CalendarTimelineWeek({
       }
     }
 
-    if (movedShoot) {
-      setColumnsData((current) =>
-        current.map((col) => {
-          if (col.dateKey === oldDateKey) {
-            return { ...col, shoots: col.shoots.filter((s) => s.id !== shootId) };
-          }
-          if (col.dateKey === targetDateKey) {
-            return { ...col, shoots: [...col.shoots, movedShoot!] };
-          }
-          return col;
-        })
-      );
+    if (!movedShoot) {
+      movedShoot = {
+        id: shootId,
+        title: active.data.current?.shootTitle || "Buổi quay",
+        startsAt: newStartIso,
+        endsAt: newEndIso,
+        status: "confirmed",
+        isPastOrCompleted: false,
+        crewNames: active.data.current?.crewNames,
+      };
     }
+
+    const newStartMs = newStart.getTime();
+    const newEndMs = newEnd.getTime();
+
+    setColumnsData((current) =>
+      current.map((col) => {
+        const { dayStartMs, dayEndMs } = getDayBoundaries(col.dateKey, timezone);
+        const shootsWithoutCurrent = col.shoots.filter((s) => s.id !== shootId);
+        const overlaps = newStartMs < dayEndMs && newEndMs > dayStartMs;
+
+        return {
+          ...col,
+          shoots: overlaps ? [...shootsWithoutCurrent, movedShoot!] : shootsWithoutCurrent,
+        };
+      })
+    );
 
     try {
       const res = await rescheduleShootAction({
@@ -587,10 +510,13 @@ export function CalendarTimelineWeek({
                 if (isViewingCurrentPeriod) {
                   e.preventDefault();
                   hasUserScrolledRef.current = false;
-                  const target = currentHour >= START_HOUR && currentHour <= END_HOUR
-                    ? currentMinutes
-                    : 8 * 60;
-                  scrollToMinute(target, true);
+                  scrollToMinute(getNowScrollMinute(currentMinutes), true);
+                } else {
+                  try {
+                    sessionStorage.setItem("glab_scroll_now", "1");
+                  } catch {
+                    // Ignore
+                  }
                 }
               }}
               title="Về ngày và giờ hiện tại"
@@ -605,32 +531,8 @@ export function CalendarTimelineWeek({
             </Link>
           </div>
 
-          {/* Right controls: Density Switcher & + Tạo lịch quay */}
+          {/* Right controls */}
           <div className="flex items-center gap-2 sm:gap-3 justify-between sm:justify-end">
-            {/* Time Density Switcher: Gọn (40px) | Tiêu chuẩn (56px) | Rộng (80px) */}
-            <div className="flex items-center rounded-full bg-surface border border-black/[0.06] p-0.5 shadow-2xs">
-              {(["compact", "standard", "spacious"] as const).map((d) => {
-                const cfg = DENSITY_CONFIG[d];
-                const active = density === d;
-                return (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => handleDensityChange(d)}
-                    title={`${cfg.label} (${cfg.hourHeight}px/giờ)`}
-                    className={cn(
-                      "rounded-full px-2.5 py-1 text-[11px] font-black transition-all duration-fast",
-                      active
-                        ? "bg-white text-ink shadow-xs"
-                        : "text-secondary hover:text-ink hover:bg-white/50"
-                    )}
-                  >
-                    {cfg.shortLabel}
-                  </button>
-                );
-              })}
-            </div>
-
             {/* Primary Action Button "+ Tạo lịch quay" */}
             <Link
               href="/shoots"
@@ -657,8 +559,36 @@ export function CalendarTimelineWeek({
             {/* 2.1 STICKY DAY HEADERS ROW */}
             <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md grid grid-cols-[60px_repeat(7,minmax(0,1fr))] border-b border-black/[0.05] pb-2 pt-1.5">
               {/* Top-left corner: GMT+7 (sticky both top and left) */}
-              <div className="sticky left-0 z-40 bg-white/95 backdrop-blur-md text-[10px] font-black uppercase text-secondary/70 flex items-center justify-start pl-1.5">
-                GMT+7
+              <div className="sticky left-0 z-40 bg-white/95 backdrop-blur-md text-[10px] font-black uppercase text-secondary/70 flex items-center justify-between pl-1.5">
+                <span>GMT+7</span>
+                <div className="relative">
+                  <motion.button
+                    type="button"
+                    aria-label="Kéo để co giãn thời gian"
+                    title="Kéo để co giãn thời gian"
+                    onPointerDown={handleTimeScalePointerDown}
+                    onPointerMove={handleTimeScalePointerMove}
+                    onPointerUp={finishTimeScaleResize}
+                    onPointerCancel={finishTimeScaleResize}
+                    whileHover={shouldReduceMotion ? undefined : { scale: 1.04 }}
+                    whileTap={shouldReduceMotion ? undefined : { scale: 0.94 }}
+                    transition={{ duration: shouldReduceMotion ? 0 : 0.18 }}
+                    className="group grid size-11 touch-none place-items-center rounded-full cursor-ns-resize text-secondary/60 hover:bg-pink/10 hover:text-pink"
+                  >
+                    <span className="text-[18px] font-black leading-none" aria-hidden="true">↕</span>
+                  </motion.button>
+                  <motion.div
+                    initial={false}
+                    animate={{
+                      opacity: isResizingTimeScale ? 1 : 0,
+                      y: isResizingTimeScale ? 0 : -3,
+                    }}
+                    transition={{ duration: shouldReduceMotion ? 0 : 0.18 }}
+                    className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 -translate-x-1/2 whitespace-nowrap rounded-full bg-ink px-2 py-1 text-[10px] font-black normal-case text-white shadow-soft"
+                  >
+                    {pixelsPerHour}px / giờ
+                  </motion.div>
+                </div>
               </div>
 
               {/* 7 Days Header */}
@@ -711,16 +641,15 @@ export function CalendarTimelineWeek({
                   timezone={timezone}
                   projectMap={projectMap}
                   hourHeight={hourHeight}
-                  density={density}
                 />
               ))}
 
               {/* CURRENT TIME HORIZONTAL INDICATOR LINE */}
-              {currentHour >= START_HOUR && currentHour <= END_HOUR && (
+              {currentMinutes >= 0 && currentMinutes <= TOTAL_MINUTES && (
                 <div
                   className="pointer-events-none absolute left-0 right-0 z-25 flex items-center"
                   style={{
-                    top: `${(((Math.min(TOTAL_MINUTES, Math.max(0, (currentHour - START_HOUR) * 60 + currentMinute)))) / 60) * hourHeight}px`,
+                    top: `${(currentMinutes / 60) * hourHeight}px`,
                   }}
                 >
                   <span className="size-2 rounded-full bg-pink shadow-[0_0_8px_rgba(255,79,154,0.8)] -ml-1" />
@@ -841,14 +770,12 @@ function DroppableTimelineColumn({
   timezone,
   projectMap,
   hourHeight,
-  density,
 }: {
   day: TimelineDayData;
   colIdx: number;
   timezone: string;
   projectMap: Record<string, string>;
   hourHeight: number;
-  density: TimelineDensity;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `timeline-col-${day.dateKey}`,
@@ -882,14 +809,14 @@ function DroppableTimelineColumn({
 
       {/* Events inside this day column positioned precisely on the timeline */}
       <div className="pointer-events-none absolute inset-0">
-        {positionedShoots.map(({ shoot, top, height, left, width, zIndex }, shootIdx) => {
+        {positionedShoots.map(({ shoot, top, height, left, width, zIndex, startMins }, shootIdx) => {
           const tone = eventTones[(colIdx + shootIdx) % eventTones.length];
           const projectName = shoot.projectId ? projectMap[shoot.projectId] : undefined;
           const heightPx = parseInt(height, 10) || hourHeight;
 
           return (
             <div
-              key={shoot.id}
+              key={`${shoot.id}-${day.dateKey}`}
               className="pointer-events-auto"
               style={{
                 position: "absolute",
@@ -902,10 +829,11 @@ function DroppableTimelineColumn({
             >
               <DraggableTimelineShootCard
                 shoot={shoot}
+                dayKey={day.dateKey}
+                displayedSegmentStartMins={startMins}
                 tone={tone}
                 timezone={timezone}
                 projectName={projectName}
-                density={density}
                 heightPx={heightPx}
               />
             </div>
@@ -918,21 +846,23 @@ function DroppableTimelineColumn({
 
 function DraggableTimelineShootCard({
   shoot,
+  dayKey,
+  displayedSegmentStartMins,
   tone,
   timezone,
   projectName,
-  density,
   heightPx,
 }: {
   shoot: TimelineShootItem;
+  dayKey: string;
+  displayedSegmentStartMins: number;
   tone: string;
   timezone: string;
   projectName?: string;
-  density: TimelineDensity;
   heightPx: number;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `shoot-${shoot.id}`,
+    id: `shoot-${shoot.id}-${dayKey}`,
     data: {
       shootId: shoot.id,
       shootTitle: shoot.title,
@@ -941,6 +871,8 @@ function DraggableTimelineShootCard({
       tone,
       projectName,
       crewNames: shoot.crewNames,
+      displayedSegmentStartMins,
+      dayKey,
     },
   });
 

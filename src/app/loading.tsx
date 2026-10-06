@@ -1,93 +1,92 @@
-import { AppScreen } from "@/components/ui/app-screen";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export default function Loading() {
+export default function AppLoading() {
   return (
-    <AppScreen
-      className="max-w-[1180px] pb-40 pt-4 sm:pb-36 sm:pt-6 lg:pb-10 lg:pt-8"
-      aria-busy="true"
+    <div
+      className="flex min-h-0 w-full flex-1 flex-col overflow-hidden px-1 sm:px-2"
+      role="status"
+      aria-label="Đang tải nội dung"
       aria-live="polite"
     >
-      {/* Top Header Bar */}
-      <div className="flex items-center justify-between gap-2 pr-12 sm:pr-14 lg:pr-0">
-        <Skeleton className="h-9 sm:h-10 w-28 rounded-pill" />
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <Skeleton className="size-9 sm:size-10 rounded-full" />
-          <Skeleton className="size-9 sm:size-10 rounded-full" />
-          <Skeleton className="size-9 sm:size-10 rounded-full" />
+      <div className="flex shrink-0 items-center justify-between gap-4 pb-5 pt-1 sm:pb-6">
+        <div className="min-w-0 space-y-2">
+          <Skeleton className="h-3 w-24 rounded-full" />
+          <Skeleton className="h-9 w-52 max-w-[60vw] sm:h-11 sm:w-72" />
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Skeleton className="hidden h-10 w-28 rounded-full sm:block" />
+          <Skeleton className="size-10 rounded-full" />
         </div>
       </div>
 
-      {/* Main Page Title Header */}
-      <header className="mt-3 sm:mt-4 min-w-0">
-        <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <div>
-            <Skeleton className="h-16 sm:h-24 w-60 sm:w-80 rounded-r16" />
-            <Skeleton className="mt-2 h-3.5 sm:h-4 w-64 sm:w-96 rounded-pill" />
-          </div>
-          <Skeleton className="h-8 w-24 rounded-pill" />
-        </div>
-      </header>
-
-      {/* Production Date Bar */}
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-y border-ink/10 py-4">
-        <div>
-          <Skeleton className="h-3 w-24 rounded-pill" />
-          <Skeleton className="mt-2 h-6 w-52 rounded-r10" />
-        </div>
-        <Skeleton className="h-9 w-32 rounded-pill" />
-      </div>
-
-      {/* KPI Overview Grid */}
-      <section className="mt-6 grid grid-cols-2 gap-2.5 sm:gap-3.5 lg:grid-cols-4">
-        {[0, 1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className="rounded-r22 border border-stroke/80 bg-surface/90 p-4 shadow-soft"
-          >
-            <div className="flex items-center justify-between">
-              <Skeleton className="h-3 w-16 rounded-pill" />
-              <Skeleton className="size-2 rounded-full" />
-            </div>
-            <Skeleton className="mt-3 h-9 w-16 rounded-r10" />
-            <Skeleton className="mt-2 h-3 w-24 rounded-pill" />
-          </div>
-        ))}
-      </section>
-
-      {/* Readiness & Schedule Timeline Skeleton */}
-      <section className="mt-8 space-y-3">
-        <div className="flex items-center justify-between pb-1">
-          <div>
-            <Skeleton className="h-3 w-28 rounded-pill" />
-            <Skeleton className="mt-1.5 h-7 w-48 rounded-r10" />
-          </div>
-          <Skeleton className="h-4 w-24 rounded-pill" />
-        </div>
-
-        {[0, 1, 2].map((i) => (
-          <div
-            key={i}
-            className="grid gap-4 rounded-r24 sm:rounded-r28 border border-ink/8 bg-surface/80 p-4 sm:p-5 shadow-soft sm:grid-cols-[120px_minmax(0,1fr)_auto]"
-          >
+      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_clamp(300px,20vw,360px)] lg:gap-6">
+        <section className="flex min-h-[420px] min-w-0 flex-col overflow-hidden rounded-[24px] border border-black/[0.05] bg-white p-4 shadow-sm sm:p-5 lg:min-h-0">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-black/[0.05] pb-4">
             <div className="space-y-2">
-              <Skeleton className="h-8 w-20 rounded-r10" />
-              <Skeleton className="h-4 w-16 rounded-pill" />
-              <Skeleton className="h-5 w-14 rounded-pill" />
+              <Skeleton className="h-3 w-28 rounded-full" />
+              <Skeleton className="h-7 w-44 sm:w-56" />
             </div>
-            <div className="space-y-2 min-w-0">
-              <Skeleton className="h-3 w-28 rounded-pill" />
-              <Skeleton className="h-6 w-3/4 rounded-r10" />
-              <Skeleton className="h-4 w-1/2 rounded-pill" />
-            </div>
-            <div className="flex sm:flex-col items-center justify-center gap-2">
-              <Skeleton className="h-12 w-20 sm:w-16 rounded-r16" />
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-9 w-20 rounded-full" />
+              <Skeleton className="h-9 w-9 rounded-full" />
             </div>
           </div>
-        ))}
-      </section>
 
-      <span className="sr-only">Đang tải lịch trình... / Loading schedule...</span>
-    </AppScreen>
+          <div className="grid shrink-0 grid-cols-7 gap-1.5 py-4 sm:gap-2">
+            {Array.from({ length: 7 }).map((_, index) => (
+              <div key={index} className="space-y-2 text-center">
+                <Skeleton className="mx-auto h-2.5 w-8 rounded-full" />
+                <Skeleton className="mx-auto size-8 rounded-full sm:size-9" />
+              </div>
+            ))}
+          </div>
+
+          <div className="grid min-h-0 flex-1 grid-cols-[44px_repeat(7,minmax(0,1fr))] overflow-hidden rounded-[18px] border border-black/[0.05] bg-bg/45">
+            <div className="space-y-8 border-r border-black/[0.05] px-2 py-4">
+              {Array.from({ length: 7 }).map((_, index) => (
+                <Skeleton key={index} className="h-2.5 w-7 rounded-full" />
+              ))}
+            </div>
+            {Array.from({ length: 7 }).map((_, dayIndex) => (
+              <div
+                key={dayIndex}
+                className="relative border-r border-black/[0.04] p-1.5 last:border-r-0"
+              >
+                {dayIndex === 1 || dayIndex === 3 || dayIndex === 5 ? (
+                  <Skeleton
+                    className={
+                      dayIndex === 3
+                        ? "mt-24 h-24 w-full rounded-r14"
+                        : "mt-12 h-16 w-full rounded-r14"
+                    }
+                  />
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <aside className="hidden min-h-0 space-y-4 overflow-hidden lg:block">
+          <div className="rounded-[24px] border border-black/[0.05] bg-white/70 p-5">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-6 w-28" />
+              <Skeleton className="size-8 rounded-full" />
+            </div>
+            <div className="mt-5 grid grid-cols-7 gap-2">
+              {Array.from({ length: 35 }).map((_, index) => (
+                <Skeleton key={index} className="aspect-square w-full rounded-full" />
+              ))}
+            </div>
+          </div>
+          <div className="rounded-[20px] border border-black/[0.05] bg-white/70 p-4">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="mt-4 h-16 w-full rounded-r14" />
+            <Skeleton className="mt-2 h-16 w-full rounded-r14" />
+          </div>
+        </aside>
+      </div>
+
+      <span className="sr-only">Đang tải nội dung…</span>
+    </div>
   );
 }

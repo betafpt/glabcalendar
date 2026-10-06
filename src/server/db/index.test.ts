@@ -15,12 +15,15 @@ describe("database client", () => {
     delete (globalThis as { __glabDbConn?: unknown }).__glabDbConn;
   });
 
-  it("fails unavailable database connections quickly enough for the UI error state to render", async () => {
+  it("uses serverless-safe connection settings for the database client", async () => {
     await import("./index");
 
     expect(postgresMock).toHaveBeenCalledWith(
       "postgresql://user:pass@example.com:5432/glab",
-      expect.objectContaining({ connect_timeout: 5 })
+      expect.objectContaining({
+        connect_timeout: 15,
+        max: 1,
+      })
     );
   });
 });

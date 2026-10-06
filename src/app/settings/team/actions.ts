@@ -8,6 +8,7 @@ import { createNotificationsRepository } from "@/server/db/notifications";
 import {
   requireWorkspaceContext,
   assertWorkspacePermission,
+  invalidateWorkspaceContext,
 } from "@/server/workspace-context";
 
 const workspaceRepo = createWorkspaceRepository(db);
@@ -104,6 +105,7 @@ export async function inviteMemberAction(
       userId: registeredUser.id,
       role,
     });
+    invalidateWorkspaceContext(registeredUser.id, registeredUser.email);
 
     // Tạo thông báo cho user được thêm
     await notificationRepo.createNotification({
@@ -160,6 +162,7 @@ export async function removeMemberAction(
   }
 
   await workspaceRepo.removeOrganizationMember(organization.id, userId);
+  invalidateWorkspaceContext(userId, targetMember.user.email);
   revalidatePath("/settings/team");
   return { success: true, message: "Đã gỡ thành viên khỏi workspace thành công" };
 }
@@ -203,6 +206,7 @@ export async function updateMemberRoleAction(
 
   const updated = await workspaceRepo.updateMemberRole(organization.id, userId, role);
   if (!updated) return { success: false, message: "Không thể cập nhật vai trò thành viên" };
+  invalidateWorkspaceContext(userId, target.user.email);
 
   revalidatePath("/settings/team");
   return { success: true, message: "Đã cập nhật quyền thành viên" };

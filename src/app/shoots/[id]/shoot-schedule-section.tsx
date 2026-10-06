@@ -10,8 +10,6 @@ import { Badge } from "@/components/ui/badge";
 import { StatusPill } from "@/components/shoots/status-pill";
 import { useLanguage } from "@/components/language-provider";
 import { ShootEditForm } from "./shoot-edit-form";
-import { DeleteEntityButton } from "@/components/ui/delete-entity-button";
-import { deleteShootAction } from "../actions";
 import { cn } from "@/lib/utils";
 
 function formatTime(date: Date, timezone: string): string {
@@ -167,14 +165,6 @@ export function ShootScheduleSection({
               <LocalizedText vi="Lịch này do tài khoản khác tạo. Mọi cập nhật từ người tạo sẽ tự hiển thị tại đây; bạn không thể sửa hoặc xóa lịch." en="This shoot is view-only for your account. Updates from the creator will appear here automatically." />
             </div>
           )}
-          {canManage ? <div className="mt-5 border-t border-stroke pt-4">
-            <DeleteEntityButton
-              action={deleteShootAction.bind(null, shoot.id)}
-              successHref="/shoots"
-              viLabel="Xóa buổi quay"
-              enLabel="Delete shoot"
-            />
-          </div> : null}
         </div>
       </AccordionContent>
     </AccordionItem>

@@ -5,7 +5,7 @@ import { motion, useReducedMotion, type HTMLMotionProps } from "motion/react";
 
 /**
  * Animated view transition for switching Month / Week / Day in Calendar.
- * Duration: 200ms, subtle fade + 6px vertical slide. Respects reduced motion.
+ * Duration: 160ms, subtle fade + 6px vertical slide. Respects reduced motion.
  */
 export function CalendarViewTransition({
   viewKey,
@@ -28,7 +28,7 @@ export function CalendarViewTransition({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -6 }}
-      transition={{ duration: 0.2, ease: [0.25, 1, 0.5, 1] }}
+      transition={{ duration: 0.16, ease: [0.25, 1, 0.5, 1] }}
       className={className}
     >
       {children}

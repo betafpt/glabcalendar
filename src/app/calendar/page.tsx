@@ -1,15 +1,14 @@
 import Link from "next/link";
+import nextDynamic from "next/dynamic";
 import { AppScreen } from "@/components/ui/app-screen";
 import { DatabaseErrorBanner } from "@/components/ui/database-error-banner";
 import { LocalizedText } from "@/components/ui/localized-text";
 import { StatusChip } from "@/components/ui/status-chip";
 import { WorkspaceMenu } from "@/components/production/workspace-menu";
 import { CalendarSearchTrigger } from "@/components/calendar/calendar-search-trigger";
-import { CalendarMonthDnd } from "@/components/calendar/calendar-month-dnd";
-import { CalendarWeekDnd } from "@/components/calendar/calendar-week-dnd";
 import { CalendarContextPanel } from "@/components/calendar/calendar-context-panel";
 import { CalendarTopHeader } from "@/components/calendar/calendar-top-header";
-import { CalendarTimelineWeek } from "@/components/calendar/calendar-timeline-week";
+import { GoogleCalendarAutoPullTrigger } from "@/components/calendar/google-calendar-auto-pull-trigger";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { CalendarViewTransition } from "@/components/ui/motion-container";
 import { LocalizedDateTime } from "@/components/ui/localized-date-time";
@@ -34,6 +33,14 @@ import {
 } from "@/components/ui/iconsax";
 import type { Shoot } from "@/server/db/schema";
 import { requireWorkspaceContext, isRedirectError } from "@/server/workspace-context";
+
+const CalendarTimelineWeek = nextDynamic(() =>
+  import("@/components/calendar/calendar-timeline-week").then((mod) => mod.CalendarTimelineWeek)
+);
+
+const CalendarMonthDnd = nextDynamic(() =>
+  import("@/components/calendar/calendar-month-dnd").then((mod) => mod.CalendarMonthDnd)
+);
 
 export const dynamic = "force-dynamic";
 
@@ -309,13 +316,9 @@ async function loadData(
     const [
       { db },
       { createCalendarRepository },
-      { createCalendarService },
-      { getCalendarFilterOptions },
     ] = await Promise.all([
       import("@/server/db"),
       import("@/server/db/calendar"),
-      import("@/server/services/calendar"),
-      import("@/server/calendar-filter-options"),
     ]);
 
     const { user, organization } = await requireWorkspaceContext();
@@ -325,54 +328,39 @@ async function loadData(
         : calendarRange(view, anchor, organization.timezone);
     const calendarRepo = createCalendarRepository(db);
 
-    // Auto-pull changes from Google Calendar with cooldown (90s) & timeout guard (3.5s)
-    let autoPulledCount = 0;
-    let googleConnectionInfo: PageData["googleConnection"] = undefined;
-    try {
-      const { createGoogleCalendarRepository } = await import("@/server/db/google-calendar");
-      const googleRepo = createGoogleCalendarRepository(db);
-      const conn = await googleRepo.getUserConnection(organization.id, user.id);
-      if (conn) {
-        googleConnectionInfo = {
-          connected: conn.status === "connected",
-          lastSyncedAt: conn.lastSyncedAt ? new Date(conn.lastSyncedAt).toISOString() : null,
-          accountEmail: conn.accountEmail ?? null,
-        };
-      }
-      const { maybeAutoPullGoogleCalendar } = await import("@/server/services/google-calendar-auto-pull");
-      const autoPullResult = await maybeAutoPullGoogleCalendar(organization.id, user.id);
-      autoPulledCount = autoPullResult.pulledCount;
-      if (autoPullResult.ran && autoPullResult.reason === "success") {
-        if (googleConnectionInfo) {
-          googleConnectionInfo.lastSyncedAt = new Date().toISOString();
-        }
-      }
-    } catch (e) {
-      console.warn("Auto-pull Google Calendar warning in loadData:", e);
-    }
+    const googleConnectionPromise = import("@/server/db/google-calendar")
+      .then(({ createGoogleCalendarRepository }) =>
+        createGoogleCalendarRepository(db).getUserConnection(organization.id, user.id)
+      )
+      .then((conn): PageData["googleConnection"] =>
+        conn
+          ? {
+              connected: conn.status === "connected",
+              lastSyncedAt: conn.lastSyncedAt ? new Date(conn.lastSyncedAt).toISOString() : null,
+              accountEmail: conn.accountEmail ?? null,
+            }
+          : undefined
+      )
+      .catch((error) => {
+        console.warn("Google Calendar connection lookup warning in loadData:", error);
+        return undefined;
+      });
 
     const { getCachedCalendarShoots, getCachedCalendarFilterOptions } = await import("@/server/cached-loaders");
     const filtersKey = JSON.stringify(filters);
 
-    // If new shoots were pulled during this request, bypass cache to load fresh DB records immediately
-    const workspaceShootsPromise = autoPulledCount > 0
-      ? createCalendarService(calendarRepo).list(
-          organization.id,
-          queryRange.start,
-          queryRange.end,
-          filters
-        )
-      : getCachedCalendarShoots(
-          organization.id,
-          queryRange.start.toISOString(),
-          queryRange.end.toISOString(),
-          filtersKey
-        );
+    const workspaceShootsPromise = getCachedCalendarShoots(
+      organization.id,
+      queryRange.start.toISOString(),
+      queryRange.end.toISOString(),
+      filtersKey
+    );
 
-    const [workspaceShoots, assignedShoots, filterOptions] = await Promise.all([
+    const [workspaceShoots, assignedShoots, filterOptions, googleConnectionInfo] = await Promise.all([
       workspaceShootsPromise,
       calendarRepo.listAssignedRange(user.id, queryRange.start, queryRange.end, filters),
       getCachedCalendarFilterOptions(organization.id),
+      googleConnectionPromise,
     ]);
     const shoots = Array.from(
       new Map([...workspaceShoots, ...assignedShoots].map((shoot) => {
@@ -388,29 +376,6 @@ async function loadData(
     ).sort((a, b) => toDate(a.startsAt).getTime() - toDate(b.startsAt).getTime());
 
     const shootCrewMap: Record<string, string[]> = {};
-    if (shoots.length > 0) {
-      const { inArray, eq, and } = await import("drizzle-orm");
-      const { shootCrewAssignments, crewMembers } = await import("@/server/db/schema");
-      const shootIds = shoots.map((s) => s.id);
-      const assignments = await db
-        .select({
-          shootId: shootCrewAssignments.shootId,
-          crewName: crewMembers.name,
-        })
-        .from(shootCrewAssignments)
-        .innerJoin(crewMembers, eq(crewMembers.id, shootCrewAssignments.crewMemberId))
-        .where(
-          and(
-            inArray(shootCrewAssignments.shootId, shootIds)
-          )
-        );
-      for (const a of assignments) {
-        if (!shootCrewMap[a.shootId]) {
-          shootCrewMap[a.shootId] = [];
-        }
-        shootCrewMap[a.shootId].push(a.crewName);
-      }
-    }
 
     const attentionData = {
       totalConflicts: 0,
@@ -420,11 +385,39 @@ async function loadData(
     };
 
     if (shoots.length > 0) {
-      try {
-        const { createChecklistRepository } = await import("@/server/db/checklists");
-        const checklistRepo = createChecklistRepository(db);
-        const shootIds = shoots.map((s) => s.id);
-        const items = await checklistRepo.listForShoots(organization.id, shootIds);
+      const shootIds = shoots.map((s) => s.id);
+      const crewPromise = Promise.all([
+        import("drizzle-orm"),
+        import("@/server/db/schema"),
+      ]).then(async ([{ eq, inArray }, { shootCrewAssignments, crewMembers }]) =>
+        db
+          .select({
+            shootId: shootCrewAssignments.shootId,
+            crewName: crewMembers.name,
+          })
+          .from(shootCrewAssignments)
+          .innerJoin(crewMembers, eq(crewMembers.id, shootCrewAssignments.crewMemberId))
+          .where(inArray(shootCrewAssignments.shootId, shootIds))
+      );
+      const checklistPromise = import("@/server/db/checklists").then(
+        ({ createChecklistRepository }) =>
+          createChecklistRepository(db).listForShoots(organization.id, shootIds)
+      );
+
+      const [assignmentsResult, checklistResult] = await Promise.allSettled([
+        crewPromise,
+        checklistPromise,
+      ]);
+
+      if (assignmentsResult.status === "fulfilled") {
+        for (const assignment of assignmentsResult.value) {
+          if (!shootCrewMap[assignment.shootId]) shootCrewMap[assignment.shootId] = [];
+          shootCrewMap[assignment.shootId].push(assignment.crewName);
+        }
+      }
+
+      if (checklistResult.status === "fulfilled") {
+        const items = checklistResult.value;
         const pending = items.filter((i) => !i.isCompleted);
         attentionData.pendingChecklistCount = pending.length;
         attentionData.checklistItems = pending.map((i) => ({
@@ -433,8 +426,6 @@ async function loadData(
           shootTitle: shoots.find((s) => s.id === i.shootId)?.title || "Lịch quay",
           completed: i.isCompleted,
         }));
-      } catch {
-        // Fallback gracefully
       }
     }
 
@@ -697,6 +688,7 @@ export default async function CalendarPage({
 
   return (
     <div className="w-full h-full max-h-full flex-1 flex flex-col min-h-0 overflow-hidden pb-[calc(var(--bottom-nav-height)+12px)] lg:pb-0">
+      <GoogleCalendarAutoPullTrigger enabled={data.googleConnection?.connected === true} />
       {/* 1. TOP HEADER (Góc trái: G.Lab Calendar *, Giữa: [Ngày | Tuần | Tháng] với Tuần active, Phải: controls) */}
       <CalendarTopHeader
         view={view}
@@ -887,324 +879,6 @@ export default async function CalendarPage({
   );
 }
 
-
-function CalendarWeekView({
-  anchor,
-  data,
-  searchParams,
-  projectMap,
-  todayKey,
-  anchorKey,
-  weekDaysList,
-  grouped,
-}: {
-  anchor: Date;
-  data: PageData;
-  searchParams: SearchParams;
-  projectMap: Map<string, string>;
-  todayKey: string;
-  anchorKey: string;
-  weekDaysList: Date[];
-  grouped: Map<string, Shoot[]>;
-}) {
-  const now = new Date();
-  const confirmedCount = data.shoots.filter((s) => s.status === "confirmed").length;
-
-  return (
-    <section className="overflow-hidden rounded-[24px] border border-black/[0.05] bg-white p-4 sm:p-5 shadow-sm">
-      {/* Week Overview Header Bar */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-black/[0.05] pb-3 sm:pb-3.5">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-pink flex items-center gap-1.5">
-            <span className="size-1.5 rounded-full bg-pink" />
-            <LocalizedText vi="LỊCH TRÌNH TUẦN" en="WEEKLY SCHEDULE" />
-          </p>
-          <h2 className="mt-0.5 font-display text-2xl sm:text-3xl font-black uppercase tracking-tight text-ink">
-            <LocalizedText vi="Tổng quan 7 ngày" en="7-Day Overview" />
-            <span className="text-pink ml-0.5">*</span>
-          </h2>
-        </div>
-
-        {/* Quick Metrics Badges & Action */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-pill border border-stroke/80 bg-white/80 px-3 py-1.5 text-xs font-black text-ink shadow-soft">
-            <span className="size-2 rounded-full bg-pink" />
-            <span>
-              {data.shoots.length} <LocalizedText vi="buổi quay tuần này" en="shoots this week" />
-            </span>
-          </span>
-
-          {confirmedCount > 0 ? (
-            <span className="hidden sm:inline-flex items-center gap-1.5 rounded-pill border border-mint bg-mint/50 px-2.5 py-1 text-[11px] font-black text-ink shadow-soft">
-              <span className="size-1.5 rounded-full bg-[#1da875]" />
-              <span>
-                {confirmedCount} <LocalizedText vi="đã xác nhận" en="confirmed" />
-              </span>
-            </span>
-          ) : null}
-
-          <Link
-            href="/shoots"
-            className="inline-flex h-8 sm:h-9 items-center gap-1 rounded-pill bg-ink px-3.5 text-xs font-black text-white shadow-soft transition hover:bg-ink/90 active:scale-press"
-          >
-            <Icon name="plus" />
-            <span>
-              <LocalizedText vi="Tạo buổi quay" en="New shoot" />
-            </span>
-          </Link>
-        </div>
-      </div>
-
-      {/* 7-Day Interactive Day Selector Strip */}
-      <div className="mt-3 sm:mt-4 grid grid-cols-7 gap-1 sm:gap-2">
-        {weekDaysList.map((day, dayIndex) => {
-          const key = dateKey(day, data.timezone);
-          const isToday = key === todayKey;
-          const isAnchor = key === anchorKey;
-          const dayShoots = grouped.get(key) ?? [];
-          const header = weekHeaders[dayIndex];
-
-          return (
-            <Link
-              key={key}
-              href={queryHref("day", day, searchParams, data.timezone)}
-              className={`group relative rounded-r16 sm:rounded-r22 p-1.5 sm:p-2.5 text-center transition-all duration-fast hover:-translate-y-0.5 hover:shadow-soft active:scale-press border ${
-                isToday
-                  ? "bg-pink text-white border-pink shadow-soft ring-2 ring-pink/20"
-                  : isAnchor
-                  ? "bg-ink text-white border-ink shadow-soft"
-                  : "bg-surface border-stroke/70 hover:bg-white text-ink"
-              }`}
-              title={`${header.en} - ${key}`}
-            >
-              <p
-                className={`text-[8px] sm:text-[10px] font-black uppercase tracking-[.08em] ${
-                  isToday || isAnchor
-                    ? "text-white/80"
-                    : header.isWeekend
-                    ? "text-pink"
-                    : "text-secondary"
-                }`}
-              >
-                <LocalizedText vi={header.vi} en={header.en} />
-              </p>
-              <p className="mt-0.5 font-display text-lg sm:text-2xl lg:text-3xl font-black leading-none">
-                {new Intl.DateTimeFormat("en", {
-                  timeZone: data.timezone,
-                  day: "numeric",
-                }).format(day)}
-              </p>
-
-              {/* Shoot count indicator / dots */}
-              <div className="mx-auto mt-1 flex h-2 items-center justify-center gap-0.5">
-                {dayShoots.length > 0 ? (
-                  dayShoots.slice(0, 3).map((s, idx) => (
-                    <span
-                      key={s.id}
-                      className={`size-1.5 rounded-full ${
-                        isToday || isAnchor
-                          ? "bg-white"
-                          : toneAccentDots[(dayIndex + idx) % toneAccentDots.length]
-                      }`}
-                    />
-                  ))
-                ) : (
-                  <span className="size-1.5 opacity-0" />
-                )}
-                {dayShoots.length > 3 ? (
-                  <span
-                    className={`text-[7px] font-black leading-none ${
-                      isToday || isAnchor ? "text-white" : "text-secondary"
-                    }`}
-                  >
-                    +
-                  </span>
-                ) : null}
-              </div>
-            </Link>
-          );
-        })}
-      </div>
-
-      {/* DESKTOP & TABLET: FULL 7-DAY MULTI-COLUMN BOARD WITH DND */}
-      <CalendarWeekDnd
-        columns={weekDaysList.map((day, dayIndex) => {
-          const key = dateKey(day, data.timezone);
-          const isToday = key === todayKey;
-          const isAnchor = key === anchorKey;
-          const dayShoots = (grouped.get(key) ?? []).sort(
-            (a, b) => a.startsAt.getTime() - b.startsAt.getTime()
-          );
-          const header = weekHeaders[dayIndex];
-          const dayParts = zonedDateParts(day, data.timezone);
-
-          return {
-            dateKey: key,
-            dayNumber: dayParts.day,
-            isToday,
-            isAnchor,
-            header,
-            dayIso: day.toISOString(),
-            shoots: dayShoots.map((s) => ({
-              id: s.id,
-              title: s.title,
-              startsAt: s.startsAt.toISOString(),
-              endsAt: s.endsAt.toISOString(),
-              status: s.status,
-              isPastOrCompleted: isPastOrCompletedShoot(s, now),
-              projectId: s.projectId,
-              locationName: s.locationName,
-            })),
-          };
-        })}
-        timezone={data.timezone}
-        cleanParams={searchParams}
-        projectMap={Object.fromEntries(projectMap.entries())}
-        statusLabels={statusLabels}
-      />
-
-      {/* MOBILE: RESPONSIVE DAY-BY-DAY AGENDA FEED */}
-      <div className="mt-4 space-y-3 block md:hidden">
-        {weekDaysList.map((day, dayIndex) => {
-          const key = dateKey(day, data.timezone);
-          const isToday = key === todayKey;
-          const isAnchor = key === anchorKey;
-          const dayShoots = (grouped.get(key) ?? []).sort(
-            (a, b) => a.startsAt.getTime() - b.startsAt.getTime()
-          );
-          const header = weekHeaders[dayIndex];
-
-          return (
-            <div
-              key={key}
-              className={`rounded-r18 border p-2.5 sm:p-3 transition-colors ${
-                isToday
-                  ? "border-pink/40 bg-pink/[0.04]"
-                  : isAnchor
-                  ? "border-ink/20 bg-surface/90"
-                  : "border-stroke/70 bg-surface/50"
-              }`}
-            >
-              {/* Day Header Banner */}
-              <div className="flex items-center justify-between pb-2 border-b border-stroke/60">
-                <div className="flex items-center gap-2">
-                  <Link
-                    href={queryHref("day", day, searchParams, data.timezone)}
-                    className={`grid size-7 place-items-center rounded-full text-xs font-black transition-all ${
-                      isToday
-                        ? "bg-pink text-white shadow-soft"
-                        : isAnchor
-                        ? "bg-ink text-white"
-                        : "bg-surface border border-stroke text-ink hover:bg-white"
-                    }`}
-                  >
-                    {new Intl.DateTimeFormat("en", {
-                      timeZone: data.timezone,
-                      day: "numeric",
-                    }).format(day)}
-                  </Link>
-
-                  <div>
-                    <span
-                      className={`text-xs font-black uppercase tracking-tight ${
-                        header.isWeekend ? "text-pink" : "text-ink"
-                      }`}
-                    >
-                      <LocalizedText vi={header.vi} en={header.en} />
-                      {", "}
-                      {new Intl.DateTimeFormat("en", {
-                        timeZone: data.timezone,
-                        month: "short",
-                        day: "numeric",
-                      }).format(day)}
-                    </span>
-                    {isToday ? (
-                      <span className="ml-1.5 rounded-pill bg-pink/15 px-1.5 py-0.5 text-[8px] font-black uppercase text-pink">
-                        <LocalizedText vi="Hôm nay" en="Today" />
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-black text-secondary tabular-nums">
-                    {dayShoots.length} <LocalizedText vi="buổi" en="shoots" />
-                  </span>
-                  <Link
-                    href={queryHref("day", day, searchParams, data.timezone)}
-                    className="text-[10px] font-bold text-pink hover:underline"
-                  >
-                    <LocalizedText vi="Xem" en="View" /> →
-                  </Link>
-                </div>
-              </div>
-
-              {/* Day Shoots List */}
-              <div className="mt-2 space-y-2">
-                {dayShoots.length > 0 ? (
-                  dayShoots.map((shoot, shootIndex) => {
-                    const tone =
-                      eventTones[(dayIndex + shootIndex) % eventTones.length];
-
-                    return (
-                      <Link
-                        key={shoot.id}
-                        href={`/shoots/${shoot.id}`}
-                        className={`grid grid-cols-[56px_minmax(0,1fr)_32px] items-center gap-2 rounded-r14 p-2.5 transition-all duration-fast hover:-translate-y-0.5 active:scale-press ${tone} ${isPastOrCompletedShoot(shoot, now) ? "opacity-45 grayscale-[35%]" : ""}`}
-                      >
-                        <div className="border-r border-ink/10 pr-1.5 text-center">
-                          <p className="text-[11px] font-black text-ink">
-                            {formatTime(shoot.startsAt, data.timezone)}
-                          </p>
-                          <p className="text-[9px] font-bold text-ink/65">
-                            {formatTime(shoot.endsAt, data.timezone)}
-                          </p>
-                        </div>
-
-                        <div className="min-w-0">
-                          {shoot.projectId && projectMap.get(shoot.projectId) ? (
-                            <p className="truncate text-[8px] font-black uppercase tracking-wider text-ink/70">
-                              {projectMap.get(shoot.projectId)}
-                            </p>
-                          ) : null}
-                          <h4 className="truncate font-display text-xs font-black uppercase tracking-tight text-ink">
-                            {shoot.title}
-                          </h4>
-                          {shoot.locationName ? (
-                            <p className="mt-0.5 flex items-center gap-1 truncate text-[9px] font-bold text-ink/70">
-                              <Icon name="location" />
-                              <span className="truncate">{shoot.locationName}</span>
-                            </p>
-                          ) : null}
-                        </div>
-
-                        <span className="grid size-7 place-items-center rounded-full bg-white/80 text-ink shadow-sm">
-                          <Icon name="arrow" />
-                        </span>
-                      </Link>
-                    );
-                  })
-                ) : (
-                  <div className="flex items-center justify-between rounded-r12 border border-dashed border-stroke/70 bg-surface/30 px-3 py-2 text-[10px] text-secondary/60">
-                    <span>
-                      <LocalizedText vi="Không có lịch quay" en="No shoots scheduled" />
-                    </span>
-                    <Link
-                      href="/shoots"
-                      className="font-black text-pink hover:underline"
-                    >
-                      + <LocalizedText vi="Thêm" en="Add" />
-                    </Link>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
 
 function CalendarDayTimelineView({
   anchor,

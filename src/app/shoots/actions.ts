@@ -76,6 +76,8 @@ export async function createShootAction(
     }
 
     revalidatePath("/shoots");
+    revalidatePath("/shoots/new");
+    revalidatePath("/today");
     revalidatePath("/calendar");
     revalidatePath("/");
     revalidateTag(CACHE_TAGS.calendar(organization.id));
@@ -204,7 +206,7 @@ export async function deleteShootAction(shootId: string, _state: DeleteActionSta
     return { ok: false, messageVi: "Không thể xóa buổi quay lúc này.", messageEn: "Unable to delete the shoot right now." };
   }
 
-  redirect("/shoots");
+  redirect("/today");
 }
 
 export type RescheduleShootResult =

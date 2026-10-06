@@ -6,6 +6,7 @@ import { errorMessage } from "@/lib/error-message";
 import type { DeleteActionState } from "@/components/ui/delete-entity-button";
 import { CALENDAR_PROJECT_OPTIONS_TAG } from "@/server/calendar-filter-options";
 import { SHOOT_DETAIL_PROJECT_OPTIONS_TAG } from "@/server/shoot-detail-options";
+import { CACHE_TAGS } from "@/server/cache-keys";
 
 export type ProjectActionState = {
   ok: boolean;
@@ -66,6 +67,7 @@ export async function createProjectAction(
     revalidatePath("/projects");
     revalidateTag(CALENDAR_PROJECT_OPTIONS_TAG);
     revalidateTag(SHOOT_DETAIL_PROJECT_OPTIONS_TAG);
+    revalidateTag(CACHE_TAGS.projects(organization.id));
     return { ok: true, messageVi: "Đã tạo dự án.", messageEn: "Project created." };
   } catch (error) {
     console.error("createProjectAction", error);
@@ -107,6 +109,7 @@ export async function updateProjectAction(
     revalidatePath(`/projects/${projectId}`);
     revalidateTag(CALENDAR_PROJECT_OPTIONS_TAG);
     revalidateTag(SHOOT_DETAIL_PROJECT_OPTIONS_TAG);
+    revalidateTag(CACHE_TAGS.projects(organization.id));
     return { ok: true, messageVi: "Đã cập nhật dự án.", messageEn: "Project updated." };
   } catch (error) {
     console.error("updateProjectAction", error);
@@ -129,6 +132,7 @@ export async function deleteProjectAction(projectId: string, _state: DeleteActio
     revalidatePath("/");
     revalidateTag(CALENDAR_PROJECT_OPTIONS_TAG);
     revalidateTag(SHOOT_DETAIL_PROJECT_OPTIONS_TAG);
+    revalidateTag(CACHE_TAGS.projects(organization.id));
     return { ok: true };
   } catch (error) {
     console.error("deleteProjectAction", error);

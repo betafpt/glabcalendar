@@ -17,6 +17,7 @@ import { WorkspaceMenu } from "@/components/production/workspace-menu";
 import type { AccountAssigneeRow } from "./crew-assignment-section";
 import { ShootSummaryHero } from "./shoot-summary-hero";
 import { ShootGoogleSyncStatus } from "./shoot-google-sync-status";
+import { ShootDeleteButton } from "./shoot-delete-button";
 import { createGoogleCalendarRepository } from "@/server/db/google-calendar";
 import { isRedirectError } from "@/server/workspace-context";
 
@@ -232,9 +233,9 @@ export default async function ShootDetailPage({ params }: { params: { id: string
         <WorkspaceMenu />
       </div>
 
-      <header className="mt-3 min-w-0">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
+      <header className="sticky top-0 z-30 mt-3 min-w-0 border-b border-stroke/60 bg-bg/95 py-3 backdrop-blur-md">
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0">
             <p className="text-[10px] font-black uppercase tracking-[.28em] text-pink">
               <LocalizedText vi="CHI TIẾT BUỔI QUAY" en="SHOOT DETAIL" />
             </p>
@@ -246,9 +247,14 @@ export default async function ShootDetailPage({ params }: { params: { id: string
               <LocalizedText vi="Chuẩn bị & mức độ sẵn sàng" en="Shoot prep & readiness" />
             </p>
           </div>
-          <p className="hidden max-w-[150px] text-[10px] font-black uppercase leading-4 tracking-[.12em] text-secondary sm:block">
-            <LocalizedText vi="Chuẩn bị kỹ. Gọn gàng. Quay tốt hơn." en="Be prepared. Stay organized. Shoot better." />
-          </p>
+          {canManage ? (
+            <ShootDeleteButton
+              shootId={shoot.id}
+              shootTitle={shoot.title}
+              dateLabel={dateLabel}
+              timeLabel={timeLabel}
+            />
+          ) : null}
         </div>
       </header>
 

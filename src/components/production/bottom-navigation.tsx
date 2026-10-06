@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useLanguage } from "@/components/language-provider";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import { Home2, Calendar, MagicStar, Profile2User, Camera } from "@/components/ui/iconsax";
 
@@ -23,6 +24,7 @@ export function BottomNavigation() {
   const pathname = usePathname();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
   const { messages } = useLanguage();
+  const shouldReduceMotion = useReducedMotion();
 
   // Reset optimistic pending state once pathname matches target
   useEffect(() => {
@@ -30,7 +32,7 @@ export function BottomNavigation() {
   }, [pathname]);
 
   const items = [
-    { href: "/", key: "today" as const, label: messages.nav.today },
+    { href: "/today", key: "today" as const, label: messages.nav.today },
     { href: "/calendar", key: "calendar" as const, label: messages.nav.calendar },
     { href: "/ai", key: "ai" as const, label: messages.nav.ai },
     { href: "/crew", key: "crew" as const, label: messages.nav.crew },
@@ -43,15 +45,26 @@ export function BottomNavigation() {
   return (
     <>
       {/* Instant Top Loading Bar for smooth transition indicator */}
-      {pendingHref !== null ? (
-        <div
-          role="progressbar"
-          aria-label="Đang chuyển trang..."
-          className="fixed top-0 inset-x-0 z-[100] h-[3px] overflow-hidden bg-pink/20 pointer-events-none"
-        >
-          <div className="h-full w-full bg-pink animate-pulse shadow-[0_0_8px_rgba(255,79,154,0.8)]" />
-        </div>
-      ) : null}
+      <AnimatePresence>
+        {pendingHref !== null ? (
+          <motion.div
+            role="progressbar"
+            aria-label="Đang chuyển trang..."
+            className="fixed top-0 inset-x-0 z-[100] h-[3px] overflow-hidden bg-pink/20 pointer-events-none"
+            initial={shouldReduceMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={shouldReduceMotion ? undefined : { opacity: 0 }}
+            transition={{ duration: shouldReduceMotion ? 0 : 0.15 }}
+          >
+            <motion.div
+              className="h-full origin-left bg-pink shadow-[0_0_8px_rgba(255,79,154,0.8)]"
+              initial={shouldReduceMotion ? false : { scaleX: 0.18 }}
+              animate={{ scaleX: shouldReduceMotion ? 1 : 0.88 }}
+              transition={{ duration: shouldReduceMotion ? 0 : 0.7, ease: [0.2, 0.8, 0.2, 1] }}
+            />
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       <nav
         aria-label="Primary"
@@ -59,10 +72,7 @@ export function BottomNavigation() {
       >
         <div className="grid grid-cols-5 lg:flex lg:flex-col lg:gap-1">
           {items.map((item) => {
-            const active =
-              item.href === "/"
-                ? currentTarget === "/"
-                : currentTarget.startsWith(item.href);
+            const active = currentTarget.startsWith(item.href);
 
             return (
               <Link

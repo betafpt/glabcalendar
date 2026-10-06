@@ -11,7 +11,7 @@ function zoneOffsetMinutes(date: Date, timeZone: string) {
   return match[1] === "-" ? -minutes : minutes;
 }
 
-function zonedMidnightUtc(year: number, month: number, day: number, timeZone: string) {
+export function zonedMidnightUtc(year: number, month: number, day: number, timeZone: string) {
   const guess = new Date(Date.UTC(year, month - 1, day));
   let result = new Date(guess.getTime() - zoneOffsetMinutes(guess, timeZone) * 60_000);
   result = new Date(guess.getTime() - zoneOffsetMinutes(result, timeZone) * 60_000);

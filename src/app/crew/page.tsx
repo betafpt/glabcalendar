@@ -35,26 +35,15 @@ async function load(): Promise<{
   error?: string;
 }> {
   try {
-    const [
-      { db },
-      { createCrewRepository },
-      { createCalendarRepository },
-      { createCrewAssignmentRepository },
-    ] = await Promise.all([
-      import("@/server/db"),
-      import("@/server/db/crew"),
-      import("@/server/db/calendar"),
-      import("@/server/db/crew-assignments"),
-    ]);
-
     const { organization } = await requireWorkspaceContext();
 
     const range = calendarRange("day", new Date(), organization.timezone);
-    const [crew, todayShoots, assignments] = await Promise.all([
-      createCrewRepository(db).listSummaries(organization.id),
-      createCalendarRepository(db).listRange(organization.id, range.start, range.end),
-      createCrewAssignmentRepository(db).listForRange(organization.id, range.start, range.end),
-    ]);
+    const { getCachedCrewPageData } = await import("@/server/cached-loaders");
+    const { crew, todayShoots, assignments } = await getCachedCrewPageData(
+      organization.id,
+      range.start.toISOString(),
+      range.end.toISOString()
+    );
 
     const todayScheduleMap = new Map<string, TodayCrewStatus>();
     const shootById = new Map(todayShoots.map((shoot) => [shoot.id, shoot]));

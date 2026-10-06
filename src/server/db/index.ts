@@ -16,10 +16,18 @@ const globalForDb = globalThis as unknown as {
   conn: postgres.Sql | undefined;
 };
 
+const databaseUrl = getServerConfig().databaseUrl;
+const usesTransactionPooler = /pooler\.supabase\.com:6543(?:\/|$)/i.test(databaseUrl);
+
 export const conn =
   globalForDb.conn ??
-  postgres(getServerConfig().databaseUrl, {
-    connect_timeout: 5,
+  postgres(databaseUrl, {
+    // Vercel can create many short-lived function instances. Keep each instance
+    // to one backend connection and give the remote pooler enough time to accept it.
+    max: 1,
+    connect_timeout: 15,
+    idle_timeout: 20,
+    prepare: !usesTransactionPooler,
   });
 
 if (process.env.NODE_ENV !== "production") {

@@ -6,6 +6,8 @@ import { createCalendarService } from "@/server/services/calendar";
 import { createCrewRepository } from "@/server/db/crew";
 import { createEquipmentRepository } from "@/server/db/equipment";
 import { createProjectRepository } from "@/server/db/projects";
+import { createShootRepository } from "@/server/db/shoots";
+import { createCrewAssignmentRepository } from "@/server/db/crew-assignments";
 import { getCalendarFilterOptions } from "@/server/calendar-filter-options";
 import { CACHE_TAGS } from "./cache-keys";
 
@@ -58,6 +60,37 @@ export const getCachedDashboardToday = async (organizationId: string, timezone: 
       : summary.range,
     shoots: (summary.shoots || []).map(hydrateShoot),
   };
+};
+
+export const getCachedDashboardRange = async (
+  organizationId: string,
+  startIso: string,
+  endIso: string
+) => {
+  const cachedFn = unstable_cache(
+    async () => {
+      const repo = createDashboardRepository(db);
+      return repo.listRange(organizationId, new Date(startIso), new Date(endIso));
+    },
+    [`dashboard-range-${organizationId}-${startIso}-${endIso}`],
+    {
+      revalidate: 60,
+      tags: [CACHE_TAGS.dashboard(organizationId), CACHE_TAGS.calendar(organizationId)],
+    }
+  );
+
+  const rows = await cachedFn();
+  return (rows || []).map((row) => ({
+    ...row,
+    shoot: hydrateShoot(row.shoot),
+    project: row.project
+      ? {
+          ...row.project,
+          createdAt: row.project.createdAt ? toDate(row.project.createdAt) : row.project.createdAt,
+          updatedAt: row.project.updatedAt ? toDate(row.project.updatedAt) : row.project.updatedAt,
+        }
+      : row.project,
+  }));
 };
 
 /**
@@ -129,6 +162,24 @@ export const getCachedCrewList = (organizationId: string) => {
   return cachedFn();
 };
 
+export const getCachedCrewPageData = (organizationId: string, startIso: string, endIso: string) => {
+  const cachedFn = unstable_cache(
+    async () => {
+      const start = new Date(startIso);
+      const end = new Date(endIso);
+      const [crew, todayShoots, assignments] = await Promise.all([
+        createCrewRepository(db).listSummaries(organizationId),
+        createCalendarRepository(db).listRange(organizationId, start, end),
+        createCrewAssignmentRepository(db).listForRange(organizationId, start, end),
+      ]);
+      return { crew, todayShoots, assignments };
+    },
+    [`crew-page-${organizationId}-${startIso}-${endIso}`],
+    { revalidate: 60, tags: [CACHE_TAGS.crew(organizationId), CACHE_TAGS.calendar(organizationId)] }
+  );
+  return cachedFn();
+};
+
 /**
  * Cached Equipment List
  */
@@ -142,6 +193,15 @@ export const getCachedEquipmentList = (organizationId: string) => {
       revalidate: 120,
       tags: [CACHE_TAGS.equipment(organizationId)],
     }
+  );
+  return cachedFn();
+};
+
+export const getCachedEquipmentSummaries = (organizationId: string) => {
+  const cachedFn = unstable_cache(
+    async () => createEquipmentRepository(db).listSummaries(organizationId),
+    [`equipment-summaries-${organizationId}`],
+    { revalidate: 120, tags: [CACHE_TAGS.equipment(organizationId)] }
   );
   return cachedFn();
 };
@@ -161,6 +221,37 @@ export const getCachedProjectsList = (organizationId: string) => {
     }
   );
   return cachedFn();
+};
+
+export const getCachedProjectsPageData = (organizationId: string) => {
+  const cachedFn = unstable_cache(
+    async () => {
+      const [projects, shootStatuses] = await Promise.all([
+        createProjectRepository(db).list(organizationId),
+        createShootRepository(db).listProjectStatuses(organizationId),
+      ]);
+      return { projects, shootStatuses };
+    },
+    [`projects-page-${organizationId}`],
+    { revalidate: 120, tags: [CACHE_TAGS.projects(organizationId), CACHE_TAGS.calendar(organizationId)] }
+  );
+  return cachedFn();
+};
+
+export const getCachedShootsPageData = async (organizationId: string, includeTestData: boolean) => {
+  const cachedFn = unstable_cache(
+    async () => {
+      const [shoots, projects] = await Promise.all([
+        createShootRepository(db).listSummaries(organizationId, { includeTestData }),
+        createProjectRepository(db).listOptions(organizationId),
+      ]);
+      return { shoots, projects };
+    },
+    [`shoots-page-${organizationId}-${includeTestData ? "with-test" : "prod"}`],
+    { revalidate: 60, tags: [CACHE_TAGS.calendar(organizationId), CACHE_TAGS.projects(organizationId)] }
+  );
+  const data = await cachedFn();
+  return { ...data, shoots: (data.shoots || []).map(hydrateShoot) };
 };
 
 /**

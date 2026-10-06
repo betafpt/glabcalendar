@@ -31,7 +31,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   const navItems = [
-    { href: "/", label: { vi: "Hôm nay", en: "Today" }, icon: Home2, key: "today" },
+    { href: "/today", label: { vi: "Hôm nay", en: "Today" }, icon: Home2, key: "today" },
     { href: "/calendar", label: { vi: "Lịch", en: "Calendar" }, icon: Calendar, key: "calendar" },
     { href: "/ai", label: { vi: "AI Copilot", en: "AI" }, icon: MagicStar, key: "ai" },
     { href: "/crew", label: { vi: "Nhân sự", en: "Crew" }, icon: Profile2User, key: "crew" },
@@ -50,7 +50,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {/* Top: G.Lab Round Logo Monogram */}
             <div className="flex flex-col items-center">
               <Link
-                href="/"
+                href="/today"
                 title="G.Lab Studio"
                 className="group relative grid size-12 place-items-center rounded-full border border-black/[0.06] bg-white/80 shadow-xs transition-all duration-fast hover:border-pink hover:bg-pink/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink"
               >
@@ -63,10 +63,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {/* Center: Circular Navigation Icons, vertically spaced */}
             <nav className="my-auto flex flex-col items-center gap-4 py-4">
               {navItems.map((item) => {
-                const active =
-                  item.href === "/"
-                    ? pathname === "/"
-                    : pathname.startsWith(item.href);
+                const active = pathname.startsWith(item.href);
                 const IconComp = item.icon;
 
                 return (

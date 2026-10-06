@@ -4,10 +4,10 @@ import { DatabaseErrorBanner } from "@/components/ui/database-error-banner";
 import { LocalizedText } from "@/components/ui/localized-text";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { StatusChip } from "@/components/ui/status-chip";
-import { Calendar, Category, Add, Location, Sun1, ArrowRight2 } from "@/components/ui/iconsax";
+import { Calendar, Add, Location, Sun1, ArrowRight2 } from "@/components/ui/iconsax";
 import { DEFAULT_APP_TIMEZONE, getServerConfig } from "@/lib/config";
 import { errorMessage } from "@/lib/error-message";
-import type { TodayDashboardSummary } from "@/server/db/dashboard";
+import type { DashboardShoot, TodayDashboardSummary } from "@/server/db/dashboard";
 import { requireWorkspaceContext, isRedirectError } from "@/server/workspace-context";
 import { WorkspaceMenu } from "@/components/production/workspace-menu";
 import { OperationsStatus } from "@/components/dashboard/operations-status";
@@ -16,8 +16,10 @@ export const dynamic = "force-dynamic";
 
 type TodayPageData = {
   summary: TodayDashboardSummary;
+  upcoming: DashboardShoot[];
   timezone: string;
   error?: string;
+  upcomingError?: string;
 };
 
 async function loadToday(): Promise<TodayPageData> {
@@ -25,12 +27,34 @@ async function loadToday(): Promise<TodayPageData> {
   try {
     timezone = getServerConfig().appTimezone;
     const { organization } = await requireWorkspaceContext();
-    const { getCachedDashboardToday } = await import("@/server/cached-loaders");
-    const summary = await getCachedDashboardToday(
-      organization.id,
-      organization.timezone
-    );
-    return { summary, timezone: organization.timezone };
+    const { getCachedDashboardRange, getCachedDashboardToday } = await import("@/server/cached-loaders");
+    const now = new Date();
+    const rangeEnd = new Date(now.getTime() + 45 * 24 * 60 * 60 * 1000);
+    const [summary, upcomingResult] = await Promise.all([
+      getCachedDashboardToday(organization.id, organization.timezone),
+      getCachedDashboardRange(
+        organization.id,
+        now.toISOString(),
+        rangeEnd.toISOString()
+      ).then(
+        (rows) => ({
+          upcoming: rows
+            .filter((row) => {
+              const status = row.shoot.status.toLowerCase();
+              return row.shoot.startsAt.getTime() > now.getTime() && status !== "completed" && status !== "cancelled";
+            })
+            .sort((a, b) => a.shoot.startsAt.getTime() - b.shoot.startsAt.getTime())
+            .slice(0, 5),
+          upcomingError: undefined as string | undefined,
+        }),
+        (error) => ({
+          upcoming: [] as DashboardShoot[],
+          upcomingError: errorMessage(error, "Unable to load upcoming shoots."),
+        })
+      ),
+    ]);
+    const { upcoming, upcomingError } = upcomingResult;
+    return { summary, upcoming, timezone: organization.timezone, upcomingError };
   } catch (error) {
     if (isRedirectError(error)) throw error;
     const fallbackSummary: TodayDashboardSummary = {
@@ -51,6 +75,7 @@ async function loadToday(): Promise<TodayPageData> {
     };
     return {
       summary: fallbackSummary,
+      upcoming: [],
       timezone,
       error: errorMessage(error, "Unable to load today's schedule."),
     };
@@ -132,7 +157,7 @@ const statusLabels: Record<string, { vi: string; en: string }> = {
 };
 
 export default async function TodayDashboard() {
-  const { summary, timezone, error } = await loadToday();
+  const { summary, upcoming, timezone, error, upcomingError } = await loadToday();
   const rows = summary.shoots;
   const dateLabels = formatDateLabels(summary.anchor ?? new Date(), timezone);
 
@@ -159,14 +184,7 @@ export default async function TodayDashboard() {
             <span className="sr-only"><LocalizedText vi="Xem lịch" en="Calendar view" /></span>
           </Link>
           <Link
-            href="/shoots"
-            className="grid size-11 place-items-center rounded-full border border-stroke/70 bg-surface text-ink shadow-soft transition-all duration-fast hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 active:scale-press"
-          >
-            <Category size={18} variant="Linear" />
-            <span className="sr-only"><LocalizedText vi="Tất cả buổi quay" en="All shoots" /></span>
-          </Link>
-          <Link
-            href="/shoots"
+            href="/shoots/new"
             className="group grid size-11 place-items-center rounded-full bg-ink text-white shadow-soft transition-all duration-fast hover:bg-pink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink focus-visible:ring-offset-2 active:scale-press"
           >
             <Add size={18} variant="Linear" />
@@ -225,11 +243,7 @@ export default async function TodayDashboard() {
 
       {/* KPI Overview Grid (Typed M3-T05 Query Model Summary) */}
       <section className="mt-6 grid grid-cols-2 gap-2.5 sm:gap-3.5 lg:grid-cols-4">
-        <Link
-          href="/shoots"
-          prefetch={true}
-          className="group rounded-r22 border border-stroke/80 bg-surface/90 p-4 shadow-soft transition-all duration-base hover:-translate-y-0.5 hover:bg-white hover:border-ink/15 active:scale-press"
-        >
+        <div className="rounded-r22 border border-stroke/80 bg-surface/90 p-4 shadow-soft">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-black uppercase tracking-wider text-secondary">
               <LocalizedText vi="Buổi quay" en="Shoots" />
@@ -242,7 +256,7 @@ export default async function TodayDashboard() {
           <p className="mt-1 text-[11px] font-bold text-secondary">
             <LocalizedText vi="Trong ngày hôm nay" en="Scheduled today" />
           </p>
-        </Link>
+        </div>
 
         <Link
           href="/crew"
@@ -415,11 +429,9 @@ export default async function TodayDashboard() {
                 {/* Time Column */}
                 <div>
                   <p className="font-display text-3xl sm:text-4xl font-black tracking-tight leading-none text-ink">
-                    {formatTime(shoot.startsAt, timezone)}
+                    {formatTime(shoot.callTime ?? shoot.startsAt, timezone)}
                   </p>
-                  <p className="mt-1 text-xs font-bold text-secondary">
-                    {formatTime(shoot.endsAt, timezone)}
-                  </p>
+                  <p className="mt-1 text-xs font-bold text-secondary"><LocalizedText vi="Call time" en="Call time" /></p>
                   <span className="mt-2 inline-flex items-center rounded-pill bg-white/70 px-2 py-0.5 text-[10px] font-extrabold text-ink/80 shadow-xs">
                     {shootDuration(shoot.startsAt, shoot.endsAt)}
                   </span>
@@ -585,7 +597,7 @@ export default async function TodayDashboard() {
             </p>
             <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
               <Link
-                href="/shoots"
+                href="/shoots/new"
                 className="inline-flex rounded-pill bg-ink px-5 py-3 text-sm font-black text-white shadow-soft transition-all duration-fast hover:bg-pink active:scale-press"
               >
                 <LocalizedText vi="Tạo lịch quay" en="Create shoot" />
@@ -601,27 +613,79 @@ export default async function TodayDashboard() {
         ) : null}
       </section>
 
+      <section className="mt-8 border-t border-ink/10 pt-6">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-pink">
+              <LocalizedText vi="Kế hoạch tiếp theo" en="Next up" />
+            </p>
+            <h2 className="mt-1 font-display text-2xl font-black uppercase tracking-tight text-ink sm:text-3xl">
+              <LocalizedText vi="Lịch quay sắp tới" en="Upcoming shoots" />
+            </h2>
+          </div>
+          <Link href="/calendar" className="shrink-0 text-xs font-black text-secondary transition hover:text-ink">
+            <LocalizedText vi="Xem lịch" en="Calendar" /> →
+          </Link>
+        </div>
+
+        {upcomingError ? <DatabaseErrorBanner error={upcomingError} className="mt-4" /> : null}
+
+        {!upcomingError && upcoming.length ? (
+          <div className="mt-4 divide-y divide-stroke overflow-hidden rounded-r18 border border-stroke bg-white">
+            {upcoming.map((row) => {
+              const shoot = row.shoot;
+              const date = new Intl.DateTimeFormat("vi-VN", {
+                timeZone: timezone,
+                weekday: "short",
+                day: "2-digit",
+                month: "2-digit",
+              }).format(shoot.startsAt);
+              return (
+                <Link
+                  key={shoot.id}
+                  href={`/shoots/${shoot.id}`}
+                  className="group grid grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-3 px-3.5 py-3 transition hover:bg-surface sm:grid-cols-[92px_minmax(0,1fr)_auto] sm:px-4"
+                >
+                  <div className="text-center">
+                    <p className="text-[10px] font-black uppercase text-secondary">{date}</p>
+                    <p className="mt-0.5 text-sm font-black text-ink">{formatTime(shoot.startsAt, timezone)}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black text-ink sm:text-base">{shoot.title}</p>
+                    <p className="mt-0.5 truncate text-[11px] font-bold text-secondary">
+                      {row.project?.name || <LocalizedText vi="Không thuộc dự án" en="Independent shoot" />}
+                      {shoot.locationName ? ` · ${shoot.locationName}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {row.conflictCount > 0 ? <span className="size-2 rounded-full bg-error" title="Có cảnh báo" /> : <span className="size-2 rounded-full bg-success" />}
+                    <ArrowRight2 size={15} variant="Linear" className="text-secondary transition group-hover:translate-x-0.5 group-hover:text-ink" />
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {!upcomingError && !upcoming.length ? (
+          <div className="mt-4 rounded-r18 border border-dashed border-stroke bg-surface/60 px-4 py-5 text-sm font-bold text-secondary">
+            <LocalizedText vi="Chưa có lịch quay sắp tới trong 45 ngày tới." en="No upcoming shoots in the next 45 days." />
+          </div>
+        ) : null}
+      </section>
+
       {/* Quick Navigation Footer */}
       <footer className="mt-10 rounded-r24 sm:rounded-r28 border border-stroke/80 bg-surface/70 p-4 sm:p-5 shadow-soft">
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-pink">
           <LocalizedText vi="TRUY CẬP NHANH" en="QUICK NAVIGATION" />
         </p>
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
           <Link
             href="/calendar"
             className="flex items-center justify-between rounded-r16 border border-stroke/70 bg-white/80 p-3 text-xs font-black text-ink shadow-soft transition-all duration-fast hover:bg-white hover:border-ink/20 active:scale-press"
           >
             <span>
               <LocalizedText vi="Lịch sản xuất" en="Calendar" />
-            </span>
-            <span className="text-secondary text-sm">→</span>
-          </Link>
-          <Link
-            href="/shoots"
-            className="flex items-center justify-between rounded-r16 border border-stroke/70 bg-white/80 p-3 text-xs font-black text-ink shadow-soft transition-all duration-fast hover:bg-white hover:border-ink/20 active:scale-press"
-          >
-            <span>
-              <LocalizedText vi="Tất cả buổi quay" en="All Shoots" />
             </span>
             <span className="text-secondary text-sm">→</span>
           </Link>

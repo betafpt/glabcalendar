@@ -156,7 +156,9 @@ export function ShootEditForm({ shoot, projects, timezone }: { shoot: Shoot; pro
           {feedback}
         </p>
       ) : null}
-      <SubmitButton />
+      <div className="sticky bottom-3 z-20 rounded-r22 border border-stroke/80 bg-surface/95 p-2 shadow-soft backdrop-blur-md">
+        <SubmitButton />
+      </div>
     </form>
   );
 }

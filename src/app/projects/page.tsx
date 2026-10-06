@@ -21,24 +21,9 @@ async function loadProjects(): Promise<{
   error?: string;
 }> {
   try {
-    const [
-      { db },
-      { createProjectRepository },
-      { createShootRepository },
-    ] = await Promise.all([
-      import("@/server/db"),
-      import("@/server/db/projects"),
-      import("@/server/db/shoots"),
-    ]);
-
     const { organization } = await requireWorkspaceContext();
-
-    const [projects, shootStatuses] = await Promise.all([
-      createProjectRepository(db).list(organization.id),
-      createShootRepository(db).listProjectStatuses(organization.id),
-    ]);
-
-    return { projects, shootStatuses };
+    const { getCachedProjectsPageData } = await import("@/server/cached-loaders");
+    return await getCachedProjectsPageData(organization.id);
   } catch (error) {
     if (isRedirectError(error)) throw error;
     return {

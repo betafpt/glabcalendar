@@ -23,12 +23,9 @@ type EquipmentSummary = {
 
 async function load(): Promise<{ items: EquipmentSummary[]; error?: string }> {
   try {
-    const [{ db }, { createEquipmentRepository }] = await Promise.all([
-      import("@/server/db"),
-      import("@/server/db/equipment"),
-    ]);
     const { organization } = await requireWorkspaceContext();
-    return { items: await createEquipmentRepository(db).listSummaries(organization.id) };
+    const { getCachedEquipmentSummaries } = await import("@/server/cached-loaders");
+    return { items: await getCachedEquipmentSummaries(organization.id) };
   } catch (error) {
     if (isRedirectError(error)) throw error;
     return { items: [], error: errorMessage(error, "Unable to load equipment.") };

@@ -6,6 +6,7 @@ import { errorMessage } from "@/lib/error-message";
 import type { DeleteActionState } from "@/components/ui/delete-entity-button";
 import { CALENDAR_CREW_OPTIONS_TAG } from "@/server/calendar-filter-options";
 import { SHOOT_DETAIL_CREW_OPTIONS_TAG } from "@/server/shoot-detail-options";
+import { CACHE_TAGS } from "@/server/cache-keys";
 
 export type CrewActionState = { ok: boolean; message?: string; messageVi?: string; messageEn?: string; fieldErrors?: Record<string, string[] | undefined> };
 
@@ -41,6 +42,7 @@ export async function createCrewAction(_state: CrewActionState, formData: FormDa
     revalidatePath("/crew");
     revalidateTag(CALENDAR_CREW_OPTIONS_TAG);
     revalidateTag(SHOOT_DETAIL_CREW_OPTIONS_TAG);
+    revalidateTag(CACHE_TAGS.crew(organization.id));
     return { ok: true, messageVi: "Đã thêm nhân sự.", messageEn: "Crew member created." };
   } catch (error) {
     console.error("createCrewAction", error);
@@ -53,7 +55,7 @@ export async function updateCrewAction(id: string, _state: CrewActionState, form
     const { organization, service } = await context();
     const result = await service.update(organization.id, id, input(formData));
     if (!result.ok) return { ok: false, messageVi: result.error.code === "NOT_FOUND" ? "Không tìm thấy nhân sự." : "Dữ liệu nhân sự chưa hợp lệ.", messageEn: result.error.message, fieldErrors: result.error.fieldErrors };
-    revalidatePath("/crew"); revalidatePath(`/crew/${id}`); revalidateTag(CALENDAR_CREW_OPTIONS_TAG); revalidateTag(SHOOT_DETAIL_CREW_OPTIONS_TAG);
+    revalidatePath("/crew"); revalidatePath(`/crew/${id}`); revalidateTag(CALENDAR_CREW_OPTIONS_TAG); revalidateTag(SHOOT_DETAIL_CREW_OPTIONS_TAG); revalidateTag(CACHE_TAGS.crew(organization.id));
     return { ok: true, messageVi: "Đã cập nhật nhân sự.", messageEn: "Crew member updated." };
   } catch (error) {
     console.error("updateCrewAction", error);
@@ -70,6 +72,7 @@ export async function deleteCrewAction(id: string, _state: DeleteActionState, _f
     revalidatePath("/shoots");
     revalidateTag(CALENDAR_CREW_OPTIONS_TAG);
     revalidateTag(SHOOT_DETAIL_CREW_OPTIONS_TAG);
+    revalidateTag(CACHE_TAGS.crew(organization.id));
     return { ok: true };
   } catch (error) {
     console.error("deleteCrewAction", error);
